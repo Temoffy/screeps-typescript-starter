@@ -3,7 +3,7 @@ import { min } from "lodash"
 import jobBoard from "./jobBoard"
 
 function harvestFilter(job: Job) {
-  return(job.type == "staticHarvest")
+  return(job.type == "delve")
 }
 
 function plan(creep: Creep, state: CreepState, jobList: Job[]) {
@@ -51,7 +51,7 @@ function resolve(state: CreepState, jobs: Job[], successful: boolean) {
   }
   let returnCode = "resolved"
   switch(command.type) {
-    case "staticHarvest":
+    case "delve":
       let targetSource = global.map.getSourceFromID(command.target)
       if(!targetSource){
         let targetMinerals = global.map.getMineralFromID(command.target)
@@ -188,7 +188,7 @@ const harvester = {
 
     resolveTask = false
     switch(creepState.commands[0].type) {
-      case "staticHarvest":
+      case "delve":
         if(staticHarvest(creep, creepState)) {
           creep.say("⛏⛏⛏??", true)
           resolveTask = true
