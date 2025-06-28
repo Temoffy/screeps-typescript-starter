@@ -2,7 +2,12 @@ import { min } from "lodash";
 import jobBoard from "./jobBoard";
 import { createUnzip } from "zlib";
 
-const task = {
+function SourceClaim(targetMem:SourcesMem){
+
+}
+
+const task: any = {
+  //todo dont use 'any'
   deliver: {
     run(hauler: Creep, state: CreepState) {
       let command = state.commands[0];
@@ -37,13 +42,13 @@ const task = {
           return true;
         case ERR_FULL:
           console.log("Energy tracking broke over " + JSON.stringify(command) + " " + JSON.stringify(target));
-          return true //lie to get transfer job to update, otherwise will keep failing
-          //todo make jobs update better
+          return true; //lie to get transfer job to update, otherwise will keep failing
+        //todo make jobs update better
         case ERR_NOT_ENOUGH_RESOURCES:
           console.log("Energy tracking broke under " + JSON.stringify(command) + " " + JSON.stringify(target));
           break;
         default:
-          console.log("Unhandled error in deliver!" + JSON.stringify(command) + " "+ result);
+          console.log("Unhandled error in deliver!" + JSON.stringify(command) + " " + result);
           break;
       }
       return false;
@@ -67,8 +72,7 @@ const task = {
 
       //creep info
       if (successful) {
-        state.info.working = true;
-        state.info.cargo[command.resourceType] -= command.amount;
+        state.info.cargo[command.resourceType] = (state.info.cargo[command.resourceType]||0) - command.amount;
       } else if (!successful) {
         global.scheduler.stateUpdate++;
         global.scheduler.mapUpdate++;
@@ -140,10 +144,10 @@ const task = {
           }
           return undefined;
         case ERR_NOT_ENOUGH_ENERGY:
-          state.info.cargo.energy = 0
-          return true
+          state.info.cargo.energy = 0;
+          return true;
         default:
-          console.log("Unhandled error in carving! " + JSON.stringify(command) + " "+ result);
+          console.log("Unhandled error in carving! " + JSON.stringify(command) + " " + result);
           break;
       }
 
@@ -157,7 +161,7 @@ const task = {
 
       let mason = Game.getObjectById(state.id);
       let command = state.commands[0];
-      if(!state.info.cargo) console.log("carve resolve error! No resourcetype cargo!");
+      if (!state.info.cargo) console.log("carve resolve error! No resourcetype cargo!");
       if (!state.info.cargo || !mason) {
         state.commands.shift();
         return false;
@@ -223,10 +227,10 @@ const task = {
           }
           return undefined;
         case ERR_NOT_ENOUGH_ENERGY:
-          state.info.cargo.energy = 0
-          return true
+          state.info.cargo.energy = 0;
+          return true;
         default:
-          console.log("Unhandled error in refining! " + JSON.stringify(command) + " "+ result);
+          console.log("Unhandled error in refining! " + JSON.stringify(command) + " " + result);
           break;
       }
 
@@ -282,7 +286,7 @@ const task = {
           //namely when miner almost full or source almost empty
           return undefined;
         default:
-          console.log("Unhandled error in earlymine! " + JSON.stringify(command) + " "+ result);
+          console.log("Unhandled error in earlymine! " + JSON.stringify(command) + " " + result);
           break;
       }
       return false;
@@ -293,8 +297,8 @@ const task = {
         return false;
       }
 
-      let miner = Game.getObjectById(state.id)
-      if(miner) state.info.cargo.energy = miner.store.energy;
+      let miner = Game.getObjectById(state.id);
+      if (miner) state.info.cargo.energy = miner.store.energy;
 
       let targetSource = global.map.getSourceFromID(state.commands[0].target);
       if (targetSource) {
@@ -308,6 +312,8 @@ const task = {
   },
   delve: {
     run(delver: Creep, state: CreepState) {
+      state.info.moving = false;
+      state.info.working = false;
       let command = state.commands[0];
       let target = Game.getObjectById(command.target);
       if (!target) {
@@ -356,7 +362,7 @@ const task = {
 
         if (target.mineralAmount == 0 || extractor[0].cooldown != 0) return undefined;
         result = delver.harvest(target);
-      }
+      } else {console.log("what delve target is "+JSON.stringify(target))}
 
       switch (result) {
         case OK:
@@ -380,13 +386,13 @@ const task = {
             return undefined;
           }
         default:
-          console.log("Unhandled error in delve! " + JSON.stringify(command) + " "+ result);
+          console.log("Unhandled error in delve! " + JSON.stringify(command) + " " + result);
           break;
       }
       return false;
     },
     resolve(state: CreepState, jobs: Job[], successful: boolean) {
-      let command = state.commands[0]
+      let command = state.commands[0];
       //job
       if (command.job != null) {
         let refJob = jobBoard.getJobFromID(jobs, command.job);
@@ -409,8 +415,8 @@ const task = {
   },
   restore: {
     run(custodian: Creep, state: CreepState) {
-      if(custodian.store.energy == 0){
-        return true
+      if (custodian.store.energy == 0) {
+        return true;
       }
 
       let command = state.commands[0];
@@ -421,10 +427,9 @@ const task = {
           return undefined;
         }
         let targetList = custodian.room.find(FIND_STRUCTURES, {
-          filter: structure =>
-            structure.hits < structure.hitsMax * 0.8
+          filter: structure => structure.hits < structure.hitsMax * 0.8
         }) as AnyStructure[];
-        if(!targetList.length) return true
+        if (!targetList.length) return true;
 
         let score = targetList[0].hits + 1000 * global.map.maxDistance(custodian.pos, targetList[0].pos);
         target = targetList[0];
@@ -436,8 +441,8 @@ const task = {
           }
         }
 
-        command.target = target.id
-        command.pos = target.pos
+        command.target = target.id;
+        command.pos = target.pos;
       }
 
       if (global.map.maxDistance(custodian.pos, command.pos) > 3 || command.pos.roomName != custodian.pos.roomName) {
@@ -451,18 +456,18 @@ const task = {
 
       switch (result) {
         case OK:
-          state.info.working = true
-          return undefined
+          state.info.working = true;
+          return undefined;
         case ERR_NOT_ENOUGH_ENERGY:
-          return true
+          return true;
         default:
-          console.log("Unhandled error in ! " + JSON.stringify(command) + " "+ result);
+          console.log("Unhandled error in ! " + JSON.stringify(command) + " " + result);
           break;
       }
       return false;
     },
     resolve(state: CreepState, jobs: Job[], successful: boolean) {
-      let command = state.commands[0]
+      let command = state.commands[0];
       //job
       if (command.job != null) {
         let refJob = jobBoard.getJobFromID(jobs, command.job);
@@ -472,8 +477,8 @@ const task = {
         }
       }
 
-      let custodian = Game.getObjectById(state.id) as Creep|undefined
-      if(state.info.cargo&&custodian) state.info.cargo.energy = custodian.store.energy
+      let custodian = Game.getObjectById(state.id) as Creep | undefined;
+      if (state.info.cargo && custodian) state.info.cargo.energy = custodian.store.energy;
       state.commands.shift();
       return;
     }
@@ -570,7 +575,47 @@ const task = {
         }
         return true;
       }
-      if (!(target instanceof ConstructionSite)) {
+      if (!(target instanceof Object)) {
+        console.log("can't build a not construction site!");
+        return false;
+      }
+
+      if (global.map.maxDistance(h.pos, command.pos) > 99999999999999999999999999) {
+        h.moveTo(target);
+        return undefined;
+      }
+
+      if (state.info.working) return undefined;
+
+      let result = OK;
+
+      switch (result) {
+        case OK:
+
+        default:
+          console.log("Unhandled error in ! " + JSON.stringify(command));
+          break;
+      }
+      return false;
+    },
+    resolve(state: CreepState, jobs: Job[], successful: boolean) {
+      state.commands.shift();
+      return;
+    }
+  },
+  stock: {
+    run(h: Creep, state: CreepState) {
+      //TODO THIS IS BOILERPLATE AND DOES NOT WORK
+      let command = state.commands[0];
+      let target = Game.getObjectById(command.target);
+      if (!target) {
+        if (!Game.rooms[command.pos.roomName]) {
+          h.moveTo(command.pos);
+          return undefined;
+        }
+        return true;
+      }
+      if (!(target instanceof Object)) {
         console.log("can't build a not construction site!");
         return false;
       }

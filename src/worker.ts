@@ -9,6 +9,7 @@ task format for commandList is:
 */
 import jobBoard from "./jobBoard";
 import task from "./tasks";
+import { stat } from "fs";
 
 //return an array of job-style objects that fully fills a worker
 //TODO: evaluate most time-effiecent actions to get energy
@@ -124,10 +125,16 @@ function plan(creep: Creep, state: CreepState, jobList: Job[]) {
     return false;
   }
 
+  if(!state.info.cargo) {
+    console.log("broken worker! no cargo")
+    return false
+  }
+
   let plannedPos = creep.pos;
   let targetPos = plannedPos;
-  let energy = creep.store[RESOURCE_ENERGY];
+  let energy = state.info.cargo[RESOURCE_ENERGY]||0;
   if (energy < creep.store.getCapacity() / 3) {
+
     let plannedPos = getEnergy(creep, state);
     if (!plannedPos) {
       return false;
@@ -171,26 +178,9 @@ const worker = {
 
     if (creep == null || creepState.info.remove) {
       while (creepState.commands.length > 0) {
-        switch (creepState.commands[0].type) {
-          case "deliver":
-            task.deliver.resolve(creepState, jobList, false);
-            break;
-          case "carve":
-            task.carve.resolve(creepState, jobList, false);
-            break;
-          case "refine":
-            task.refine.resolve(creepState, jobList, false);
-            break;
-          case "earlymine":
-            task.earlymine.resolve(creepState, jobList, false);
-            break;
-          case "restore":
-            task.restore.resolve(creepState, jobList, false);
-            break;
-          case "delve":
-            task.delve.resolve(creepState, jobList, false);
-            break;
-        }
+        let command = creepState.commands[0];
+        if (task[command.type]) task[command.type].resolve(creepState, jobList, false);
+        else console.log("unknown task type 1");
       }
       return "deadCreep";
     }
@@ -198,7 +188,7 @@ const worker = {
     let resolveTask: boolean | undefined = true;
     let resolveMessage = "working";
     let loop = 0;
-    while (resolveTask && loop < 1) {
+    while (resolveTask && loop < 4) {
       //will loop forever getting energy from container then getting energy from container then...
       //current will cause problems for tracking energy amounts in mem
       loop++;
@@ -211,90 +201,26 @@ const worker = {
       }
 
       resolveTask = undefined;
-      switch (creepState.commands[0].type) {
-        case "deliver":
-          resolveTask = task.deliver.run(creep, creepState);
-          break;
-        case "carve":
-          resolveTask = task.carve.run(creep, creepState);
-          break;
-        case "refine":
-          resolveTask = task.refine.run(creep, creepState);
-          break;
-        case "earlymine":
-          resolveTask = task.earlymine.run(creep, creepState);
-          break;
-        case "restore":
-          resolveTask = task.restore.run(creep, creepState);
-          break;
-        case "delve":
-          console.log("WORKER CLAIMED Static HARVEST JOB!!");
-          break;
-        default:
-          console.log("unknown jobtype in creepstate:", JSON.stringify(creepState));
-      }
+      let command = creepState.commands[0];
+      if (task[command.type]) resolveTask = task[command.type].run(creep, creepState);
+      else console.log("unknown task type 2");
       if (resolveTask != undefined) {
         resolveMessage = "testing"; //resolve(creepState, jobList, true);
         global.scheduler.jobUpdate++;
         global.scheduler.mapUpdate++;
-        switch (creepState.commands[0].type) {
-          case "deliver":
-            task.deliver.resolve(creepState, jobList, resolveTask);
-            break;
-          case "carve":
-            task.carve.resolve(creepState, jobList, resolveTask);
-            break;
-          case "refine":
-            task.refine.resolve(creepState, jobList, resolveTask);
-            break;
-          case "earlymine":
-            task.earlymine.resolve(creepState, jobList, resolveTask);
-            break;
-          case "restore":
-            task.restore.resolve(creepState, jobList, resolveTask);
-            break;
-          case "delve":
-            task.delve.resolve(creepState, jobList, resolveTask);
-            break;
-        }
+        if (task[command.type]) resolveTask = task[command.type].resolve(creepState, jobList, resolveTask);
+        else console.log("unknown task type 3");
       }
     }
     return resolveMessage;
   },
   remove(creepState: CreepState, jobs: Job[]) {
     while (creepState.commands.length > 0) {
-      switch (creepState.commands[0].type) {
-        case "deliver":
-          task.deliver.resolve(creepState, jobs, false);
-          break;
-        case "carve":
-          task.carve.resolve(creepState, jobs, false);
-          break;
-        case "refine":
-          task.refine.resolve(creepState, jobs, false);
-          break;
-        case "earlymine":
-          task.earlymine.resolve(creepState, jobs, false);
-          break;
-        case "restore":
-          task.restore.resolve(creepState, jobs, false);
-          break;
-        case "delve":
-          task.delve.resolve(creepState, jobs, false);
-          break;
-      }
-      //resolve(creepState, jobs, false);
+      let command = creepState.commands[0]
+      if (task[command.type]) task[command.type].resolve(creepState, jobs, false);
+      else console.log("unknown task type 4")
     }
   }
 };
 
-const hauler = {
-  run(creepState: CreepState, jobList: Job[]) {
-    return "";
-  },
-  remove(creepState: CreepState, jobs: Job[]) {
-
-  }
-};
-
-export { worker, hauler };
+export default worker;
