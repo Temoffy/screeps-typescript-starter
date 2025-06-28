@@ -15,6 +15,11 @@ const MY_NUMS = {
   UPGRADE_PRIORITY: 0,
   REPAIR_PRIORITY: 495,
   LT_HARVEST_PRIORITY: 400,
+  UNSTABLE_SOURCE_RANK: 0,
+  STABLE_SOURCE_RANK: 1,
+  CENTRAL_BUFFER_RANK: 2,
+  DISTRIBUTED_BUFFER_RANK: 3,
+  END_USER_RANK: 4
 };
 
 function cleanList(jobs: Job[]) {
@@ -24,19 +29,19 @@ function cleanList(jobs: Job[]) {
       i = i - 1;
       continue;
     }
-    let job = jobs[i]
-    if (job.type == "repair"){
-      job = job as RepairJob
+    let job = jobs[i];
+    if (job.type == "restore") {
+      job = job as RepairJob;
       for (let k = 0; k < job.target.length; k++) {
-        let targetId = job.target[k]
-        let target = Game.getObjectById(targetId) as AnyStructure | undefined
-        if(target && target.hitsMax*0.9 < target.hits){
-          job.target.splice(Number(k),1)
-          k = k - 1
+        let targetId = job.target[k];
+        let target = Game.getObjectById(targetId) as AnyStructure | undefined;
+        if (target && target.hitsMax * 0.9 < target.hits) {
+          job.target.splice(Number(k), 1);
+          k = k - 1;
         }
       }
-      if(job.target.length == 0){
-        console.log("repair detected in cleanlist")
+      if (job.target.length == 0) {
+        console.log("restore detected in cleanlist");
         jobs.splice(i, 1);
         i = i - 1;
         continue;
@@ -70,11 +75,13 @@ function getTransferJobs(jobs: Job[]) {
         continue;
       }
       let newJob: TransferJob = {
-        type: "transfer",
+        type: "deliver",
         target: item.id,
+        pos: item.pos,
         amount: item.store.getFreeCapacity(RESOURCE_ENERGY),
+        rank: MY_NUMS.END_USER_RANK,
         priority: MY_NUMS.TRANSFER_PRIORITY,
-        tick:Game.time,
+        tick: Game.time,
         active: 0,
         id: getID(jobs)
       };
@@ -86,7 +93,7 @@ function getTransferJobs(jobs: Job[]) {
 function getUpgradeJobs(jobs: Job[]) {
   for (let i in Game.rooms) {
     let thisRoom = Game.rooms[i];
-    if (thisRoom.controller == undefined || thisRoom.controller.my == false) {
+    if (!thisRoom.controller || thisRoom.controller.my == false) {
       continue;
     }
     let item = thisRoom.controller;
@@ -107,11 +114,12 @@ function getUpgradeJobs(jobs: Job[]) {
     }
     let amount = 15000000;
     let newJob = {
-      type: "upgrade",
+      type: "refine",
       target: item.id,
+      pos: item.pos,
       amount: amount,
       priority: MY_NUMS.UPGRADE_PRIORITY,
-      tick:Game.time,
+      tick: Game.time,
       active: 0,
       id: getID(jobs)
     };
@@ -139,7 +147,7 @@ function getConstructionJobs(jobs: Job[]) {
         amount = amount + item.progressTotal - item.progress;
       }
       let newJob = {
-        type: "construct",
+        type: "carve",
         target: item.id,
         pos: item.pos,
         amount: amount,
@@ -153,7 +161,7 @@ function getConstructionJobs(jobs: Job[]) {
 }
 
 function getRepairJobs(jobs: Job[]) {
-  let priorRepairJobs = jobs.filter(entity => entity.type == "repair") as RepairJob[];
+  let priorRepairJobs = jobs.filter(entity => entity.type == "restore") as RepairJob[];
   let priorTargets: Id<AnyStructure>[] = [];
   for (let pJob of priorRepairJobs) {
     priorTargets.concat(pJob.target);
@@ -168,14 +176,16 @@ function getRepairJobs(jobs: Job[]) {
         structure.hits < structure.hitsMax / 2 &&
         global.map.rooms[structure.room.name] &&
         !global.map.rooms[structure.room.name].enemyPresence &&
-        structure.structureType != STRUCTURE_WALL &&
-        structure.structureType != STRUCTURE_RAMPART
+        ((structure.structureType != STRUCTURE_WALL && structure.structureType != STRUCTURE_RAMPART) ||
+          structure.hits < 1000)
     });
     for (let item of targets) {
       if (priorTargets.includes(item.id)) {
         continue;
       }
-      jobamount = jobamount + (item.hitsMax - item.hits);
+      let newamount = item.hitsMax - item.hits;
+      if (item instanceof StructureWall || item instanceof StructureRampart) newamount = 2000;
+      jobamount = jobamount + newamount;
       jobtargets.push(item.id);
     }
   }
@@ -184,7 +194,7 @@ function getRepairJobs(jobs: Job[]) {
   }
   jobamount = Math.floor(jobamount / 100);
   let newJob = {
-    type: "repair",
+    type: "restore",
     target: jobtargets,
     pos: Game.getObjectById(jobtargets[0])!.pos,
     amount: jobamount,
@@ -196,7 +206,7 @@ function getRepairJobs(jobs: Job[]) {
 }
 
 function getStaticHarvestJobs(jobs: Job[]) {
-  let priorHarvestJobs = jobs.filter(entity => entity.type == "staticHarvest") as HarvestJob[];
+  let priorHarvestJobs = jobs.filter(entity => entity.type == "delve") as HarvestJob[];
   let map = global.map.rooms;
   for (let i in map) {
     let thisRoom = map[i];
@@ -213,7 +223,7 @@ function getStaticHarvestJobs(jobs: Job[]) {
           continue;
         }
         let newJob = {
-          type: "staticHarvest",
+          type: "delve",
           target: source.id,
           pos: source.pos,
           amount: 5,
@@ -239,7 +249,7 @@ function getStaticHarvestJobs(jobs: Job[]) {
         }
         let workparts = 50;
         let newJob = {
-          type: "staticHarvest",
+          type: "delve",
           target: mineral.id,
           pos: mineral.pos,
           amount: workparts,
@@ -285,7 +295,13 @@ const jobBoard = {
   maximum cargo creep can handle,
   roomposition object from which to weight distance in priority calc
   */
-  getJob(jobs: Job[], jobFilter: (value: Job) => unknown, workparts: number, origin1: RoomPosition, origin2: RoomPosition) {
+  getJob(
+    jobs: Job[],
+    jobFilter: (value: Job) => unknown,
+    workparts: number,
+    origin1: RoomPosition,
+    origin2: RoomPosition
+  ) {
     let filteredJobs = jobs.filter(jobFilter);
     filteredJobs = filteredJobs.filter(job => job.amount >= 0);
 
@@ -299,17 +315,22 @@ const jobBoard = {
       let distance = 0;
       let target;
       let priority = job.priority;
-      if (job.type == "repair") {
+      if (job.type == "restore") {
         target = Game.getObjectById(job.target[0] as Id<AnyStructure>);
         let repairdistance = 999;
         for (let repairtarget of job.target) {
           let targettemp = Game.getObjectById(repairtarget as Id<AnyStructure>);
-          if (targettemp && global.map.maxDistance(targettemp.pos, origin1) + global.map.maxDistance(targettemp.pos, origin2) < repairdistance) {
-            repairdistance = global.map.maxDistance(targettemp.pos, origin1) + global.map.maxDistance(targettemp.pos, origin2);
+          if (
+            targettemp &&
+            global.map.maxDistance(targettemp.pos, origin1) + global.map.maxDistance(targettemp.pos, origin2) <
+              repairdistance
+          ) {
+            repairdistance =
+              global.map.maxDistance(targettemp.pos, origin1) + global.map.maxDistance(targettemp.pos, origin2);
             target = targettemp;
           }
         }
-      } else if (job.type == "staticHarvest") {
+      } else if (job.type == "delve") {
         job = job as HarvestJob;
         if (job.active > 0) {
           continue;
@@ -322,9 +343,9 @@ const jobBoard = {
         target = Game.getObjectById(job.target as Id<AnyStructure>);
       }
       if (target != null) {
-        distance = global.map.maxDistance(target.pos, origin1) + global.map.maxDistance(target.pos, origin1);
+        distance = global.map.maxDistance(target.pos, origin1) + global.map.maxDistance(target.pos, origin2);
       }
-      let age = 0
+      let age = 0;
       priority = priority - distance * 0.1;
 
       if (priority > chosenPriority && job.amount > 0) {

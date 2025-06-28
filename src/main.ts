@@ -8,6 +8,7 @@ reason: had enough of type errors in runtime
 import { ErrorMapper } from "utils/ErrorMapper";
 import jobBoard from "./jobBoard";
 import worker from "./worker";
+import hauler from "./hauler";
 import harvester from "./harvester";
 import combat from "./combat";
 
@@ -39,8 +40,10 @@ declare global {
   type TransferJob = {
     readonly type: string;
     readonly target: Id<AnyStoreStructure>;
+    readonly pos: RoomPosition;
     amount: number;
     priority: number;
+    rank: number;
     tick: number;
     active: number;
     readonly id: number;
@@ -48,10 +51,11 @@ declare global {
   type UpgradeJob = {
     readonly type: string;
     readonly target: Id<StructureController>;
+    readonly pos: RoomPosition;
     amount: number;
     priority: number;
     tick: number;
-    active: number;
+    active: number; //todo strip this out and swap amount to workparts
     readonly id: number;
   };
   type ConstructionJob = {
@@ -66,7 +70,7 @@ declare global {
   type RepairJob = {
     readonly type: string;
     readonly target: Id<AnyStructure>[];
-    pos: RoomPosition;
+    readonly pos: RoomPosition;
     amount: number;
     priority: number;
     active: number;
@@ -101,11 +105,12 @@ declare global {
   };
   type Command = {
     readonly type: string;
-    target: Id<AnyStructure|Creep|Source|Mineral|Resource|Tombstone|Ruin>;
-    pos?: RoomPosition;
+    target: Id<AnyStructure | Creep | Source | Mineral | Resource | Tombstone | Ruin>;
+    pos: RoomPosition;
     amount: number;
     readonly job?: number;
-    source?: SourcesMem;
+    readonly source?: SourcesMem; //todo remove when swapped over to new tasks
+    readonly resourceType?: ResourceConstant;
   };
   type TowerState = {
     readonly type: "tower";
@@ -137,11 +142,11 @@ declare global {
     spaces: number;
     workCap: number;
     id: Id<Source>;
-    pos: RoomPosition;
+    readonly pos: RoomPosition;
     container?: Id<AnyStoreStructure>;
   };
   type ContainerMem = {
-    pos: RoomPosition;
+    readonly pos: RoomPosition;
     rank: number;
     store: { [key: string]: number };
     active: number;
@@ -151,16 +156,16 @@ declare global {
     concentration: number;
     type: string;
     id: Id<Mineral>;
-    pos: RoomPosition;
+    readonly pos: RoomPosition;
     container?: Id<AnyStoreStructure>;
   };
 
   type ContainerAdd = {
-    roomId: string
-    containerId: Id<AnyStoreStructure>
-    amount: number
-    type: string
-  }
+    roomId: string;
+    containerId: Id<AnyStoreStructure>;
+    amount: number;
+    type: string;
+  };
 
   // Syntax for adding properties to `global` (ex "global.log")
   namespace NodeJS {
@@ -169,41 +174,53 @@ declare global {
       cli: Cli;
       tools: Tools;
       map: MapInfo;
+      scheduler: Scheduler;
     }
   }
 }
 
 class Tools {
-  public HasStore<T extends Object>(obj: T): obj is {
-    store: StoreDefinition | StoreDefinitionUnlimited | Store<ResourceConstant, false>
+  public HasStore<T extends Object>(
+    obj: T
+  ): obj is {
+    store: StoreDefinition | StoreDefinitionUnlimited | Store<ResourceConstant, false>;
   } & T {
     return "store" in obj;
   }
-  public IsTransferJob<T extends Object>(obj: T): obj is {
-    store: StoreDefinition | StoreDefinitionUnlimited | Store<ResourceConstant, false>
+  public IsTransferJob<T extends Object>(
+    obj: T
+  ): obj is {
+    store: StoreDefinition | StoreDefinitionUnlimited | Store<ResourceConstant, false>;
   } & T {
-    return "type" in obj && obj.type == "transfer";
+    return "type" in obj && obj.type == "deliver";
   }
+  public BodyCost = function (body: BodyPartConstant[]) {
+    let cost = 0;
+    for (let i in body) {
+      cost = cost + BODYPART_COST[body[i]];
+    }
+    return cost;
+  };
 }
-global.tools = new Tools()
+global.tools = new Tools();
 
 class Cli {
   public KillMem() {
-    scheduler.health -= 5;
+    global.scheduler.health -= 5;
     console.log("KillingMem");
   }
 }
 class MapInfo {
   public rooms: MapMem = Memory.roomInfo || {};
-  public containerAdd: ContainerAdd[] = []
+  public containerAdd: ContainerAdd[] = [];
   public queueUpdates() {
     for (let id in this.rooms) {
       this.rooms[id].updated = false;
-      scheduler.mapUpdate++;
+      global.scheduler.mapUpdate++;
     }
   }
   public updateRoom(roomID: string) {
-    if(!Game.rooms[roomID]) return
+    if (!Game.rooms[roomID]) return;
 
     let roomMem = this.rooms[roomID];
     let room = Game.rooms[roomID];
@@ -229,7 +246,7 @@ class MapInfo {
 
         roomMem.sources.push({
           spaces: space,
-          workCap: 7,
+          workCap: 5,
           id: item.id,
           pos: item.pos
         });
@@ -262,14 +279,15 @@ class MapInfo {
         });
       }
     }
-    let username = Game.rooms[roomID].controller?.owner?.username
+    //todo fix source workparts to be proper per room regen rate
+    let username = Game.rooms[roomID].controller?.owner?.username;
     if (username && username != "Temoffy") {
       roomMem.enemyPresence = true;
     }
 
-    for(let container in roomMem.containers){
-      if(!Game.getObjectById(container)){
-        delete roomMem.containers[container]
+    for (let container in roomMem.containers) {
+      if (!Game.getObjectById(container)) {
+        delete roomMem.containers[container];
       }
     }
     let containers: (AnyStructure | Resource | Ruin | Tombstone)[] = room.find(FIND_STRUCTURES, {
@@ -283,13 +301,18 @@ class MapInfo {
       ...room.find(FIND_TOMBSTONES)
     ];
     for (let container of containers as (AnyStoreStructure | Resource | Ruin | Tombstone)[]) {
-      if (roomMem.containers[container.id] && (container instanceof StructureContainer || container instanceof StructureStorage)) {
-        let containerMem = roomMem.containers[container.id]
-        if(containerMem.active==0){
-          for(let id in container.store){
-            if(container.store[id as ResourceConstant] != containerMem.store[id]){
-              console.log("ENERGY TRACKING BROKE FOR "+JSON.stringify(containerMem)+"  "+JSON.stringify(container.store))
-              containerMem.store[id] = container.store[id as ResourceConstant]
+      if (
+        roomMem.containers[container.id] &&
+        (container instanceof StructureContainer || container instanceof StructureStorage)
+      ) {
+        let containerMem = roomMem.containers[container.id];
+        if (containerMem.active == 0) {
+          for (let id in container.store) {
+            if (container.store[id as ResourceConstant] != containerMem.store[id]) {
+              console.log(
+                "ENERGY TRACKING BROKE FOR " + JSON.stringify(containerMem) + "  " + JSON.stringify(container.store)
+              );
+              containerMem.store[id] = container.store[id as ResourceConstant];
             }
           }
         }
@@ -452,9 +475,9 @@ const names = [
   "Gerald"
 ];
 //data not about my units, array of rooms
-Memory.states = []
-Memory.jobs = []
-Memory.roomInfo = {}
+Memory.states = [];
+Memory.jobs = [];
+Memory.roomInfo = {};
 global.map = new MapInfo();
 global.map.updateMap();
 //track entities and their info, every state associative array must have a type and id property
@@ -532,10 +555,10 @@ class Scheduler {
   }
 
   endTick() {
-    for(let i of global.map.containerAdd){
-      global.map.rooms[i.roomId].containers[i.containerId].store[i.type] += i.amount
+    for (let i of global.map.containerAdd) {
+      global.map.rooms[i.roomId].containers[i.containerId].store[i.type] += i.amount;
     }
-    global.map.containerAdd = []
+    global.map.containerAdd = [];
 
     //confirms code completed, see top of loop
     this.health++; //counteract -- at the top
@@ -548,12 +571,12 @@ class Scheduler {
   }
 }
 
-let scheduler = new Scheduler();
+global.scheduler = new Scheduler();
 
 // When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
 // This utility uses source maps to get the line numbers and file names of the original, TS source code
 export const loop = ErrorMapper.wrapLoop(() => {
-  scheduler.startTick();
+  global.scheduler.startTick();
 
   //iterate over all available actors
   if (states.length && states.length > 0) {
@@ -561,7 +584,7 @@ export const loop = ErrorMapper.wrapLoop(() => {
       let gameEntity = Game.getObjectById(entity.id);
       if (gameEntity == null || entity.info.remove) {
         entity.info.remove = true;
-        scheduler.stateUpdate++;
+        global.scheduler.stateUpdate++;
       }
 
       switch (entity.type) {
@@ -575,25 +598,31 @@ export const loop = ErrorMapper.wrapLoop(() => {
             case "worker":
               result = worker.run(entity, jobs);
               if (result == "towerBuilt" || result == "spawnBuilt" || result == "deadCreep") {
-                scheduler.stateUpdate++;
+                global.scheduler.stateUpdate++;
               }
               break;
             case "mobileHarvester":
               result = harvester.run(entity, jobs);
               if (result == "deadCreep") {
-                scheduler.stateUpdate++;
+                global.scheduler.stateUpdate++;
+              }
+              break;
+            case "hauler":
+              result = hauler.run(entity, jobs);
+              if (result == "deadCreep") {
+                global.scheduler.stateUpdate++;
               }
               break;
             case "poke":
               result = combat.run(entity, jobs);
               if (result == "deadCreep") {
-                scheduler.stateUpdate++;
+                global.scheduler.stateUpdate++;
               }
               break;
             case "drain":
               result = combat.run(entity, jobs);
               if (result == "deadCreep") {
-                scheduler.stateUpdate++;
+                global.scheduler.stateUpdate++;
               }
               break;
             default:
@@ -612,7 +641,7 @@ export const loop = ErrorMapper.wrapLoop(() => {
           let workerNum = workers.length;
           let creepCost = 200.0; //one move, one work, one carry
           if (
-            workerNum < 8 &&
+            workerNum < 6 &&
             !spawner.spawning &&
             energy >= 200 &&
             (workerNum < 2 || energy >= energyCap - (energyCap % creepCost))
@@ -628,8 +657,8 @@ export const loop = ErrorMapper.wrapLoop(() => {
             }
             let creepName = names[Math.round(Game.time / 20) % names.length] + (Game.time % 20) + "-w";
             spawner.spawnCreep(partList, creepName);
-            scheduler.stateUpdate++;
-            scheduler.jobRest++;
+            global.scheduler.stateUpdate++;
+            global.scheduler.jobRest++;
           }
 
           let mobileHarvesters = _.filter(states, entity => entity.type == "creep" && entity.role == "mobileHarvester");
@@ -637,8 +666,8 @@ export const loop = ErrorMapper.wrapLoop(() => {
             let partList = [WORK, WORK, WORK, WORK, WORK, MOVE];
             let creepName = names[Math.round(Game.time / 20) % names.length] + (Game.time % 20) + "-mh";
             spawner.spawnCreep(partList, creepName);
-            scheduler.stateUpdate++;
-            scheduler.jobRest++;
+            global.scheduler.stateUpdate++;
+            global.scheduler.jobRest++;
           }
 
           let combatants = _.filter(
@@ -650,8 +679,8 @@ export const loop = ErrorMapper.wrapLoop(() => {
             let partList = [MOVE]; //[TOUGH,TOUGH,TOUGH,TOUGH,MOVE,MOVE,MOVE,MOVE,HEAL,HEAL,HEAL,HEAL]
             let creepName = names[Math.round(Game.time / 20) % names.length] + (Game.time % 20) + "-p";
             spawner.spawnCreep(partList, creepName);
-            scheduler.stateUpdate++;
-            scheduler.jobRest++;
+            global.scheduler.stateUpdate++;
+            global.scheduler.jobRest++;
           }
 
           break;
@@ -674,7 +703,11 @@ export const loop = ErrorMapper.wrapLoop(() => {
           }
 
           let closestHostile = gameUnit.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
-          if (closestHostile && (global.map.maxDistance(closestHostile.pos, gameUnit.pos) < 10 || closestHostile.owner.username == "Invader")) {
+          if (
+            closestHostile &&
+            (global.map.maxDistance(closestHostile.pos, gameUnit.pos) < 10 ||
+              closestHostile.owner.username == "Invader")
+          ) {
             gameUnit.attack(closestHostile);
             entity.info.target = closestHostile.id;
           } else {
@@ -696,7 +729,7 @@ export const loop = ErrorMapper.wrapLoop(() => {
     }
   }
 
-  scheduler.endTick();
+  global.scheduler.endTick();
 
   if (Game.cpu.bucket == 10000) {
     Game.cpu.generatePixel();
@@ -716,6 +749,9 @@ function stateUpdate(states: StateEntity[]) {
         switch (testState.role) {
           case "worker":
             worker.remove(testState, jobs);
+            break;
+          case "hauler":
+            hauler.remove(testState, jobs);
             break;
           case "mobileHarvester":
             harvester.remove(testState, jobs);
@@ -756,6 +792,9 @@ function stateUpdate(states: StateEntity[]) {
       case "mh":
         role = "mobileHarvester";
         break;
+      case "h":
+        role = "hauler";
+        break;
       case "p":
         role = "poke";
         break;
@@ -766,8 +805,13 @@ function stateUpdate(states: StateEntity[]) {
         console.log("WHAT CREEP TYPE IS THIS *#^");
         break;
     }
-    let canCargo = undefined;
-    if (creep.store.getCapacity() > 0) canCargo = {};
+    let cargo: ({[key: string]: number} | undefined) = undefined;
+    if (creep.store.getCapacity() > 0) cargo = {};
+    if(creep.store.getUsedCapacity()>0 && cargo){
+      for (let id in creep.store) {
+        cargo[id] = creep.store[id as ResourceConstant];
+      }
+    }
     states.push({
       type: "creep",
       id: creep.id,
@@ -776,7 +820,7 @@ function stateUpdate(states: StateEntity[]) {
       info: {
         remove: false,
         workParts: creep.getActiveBodyparts(WORK),
-        cargo: canCargo,
+        cargo: cargo,
         working: false,
         moving: false,
         pos: creep.pos

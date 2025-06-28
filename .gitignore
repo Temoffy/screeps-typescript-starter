@@ -91,7 +91,6 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 screeps.sample.json
-screeps.sample.json
 .vs/ProjectSettings.json
 .vs/slnx.sqlite
 .vs/VSWorkspaceState.json
@@ -99,5 +98,4 @@ screeps.sample.json
 .vs/typescriptbotclone/v17/.wsuo
 .vs/typescriptbotclone/v17/DocumentLayout.backup.json
 .vs/typescriptbotclone/v17/DocumentLayout.json
-.vscode/settings.json
 .vscode/settings.json
