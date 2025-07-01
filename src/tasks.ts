@@ -51,7 +51,7 @@ const task: any = {
           console.log("Unhandled error in deliver!" + JSON.stringify(command) + " " + result);
           break;
       }
-      return false;
+      return true;
     },
     resolve(state: CreepState, jobs: Job[], successful: boolean) {
       let command = state.commands[0];
@@ -72,7 +72,7 @@ const task: any = {
 
       //creep info
       if (successful) {
-        state.info.cargo[command.resourceType] = (state.info.cargo[command.resourceType]||0) - command.amount;
+        state.info.cargo[command.resourceType] = state.info.cargo[command.resourceType]? state.info.cargo[command.resourceType] - command.amount: -1*command.amount;
       } else if (!successful) {
         global.scheduler.stateUpdate++;
         global.scheduler.mapUpdate++;
@@ -345,7 +345,7 @@ const task: any = {
       }
 
       if (global.map.maxDistance(delver.pos, pos) > dist || command.pos.roomName != delver.pos.roomName) {
-        delver.moveTo(target, { visualizePathStyle: { stroke: "#fcba03" } });
+        delver.moveTo(pos, { visualizePathStyle: { stroke: "#fcba03" } });
         return undefined;
       }
 
@@ -354,6 +354,7 @@ const task: any = {
       let result;
       if (target instanceof Source) {
         if (target.energy > 0) result = delver.harvest(target);
+        else return undefined
       } else if (target instanceof Mineral) {
         let extractor = target.pos.findInRange(FIND_STRUCTURES, 0, {
           filter: structure => structure.structureType == STRUCTURE_EXTRACTOR
@@ -367,7 +368,8 @@ const task: any = {
       switch (result) {
         case OK:
           state.info.working = true;
-          if (containerMem) {
+          if (containerMem && veinMem.container) {
+            let container = Game.getObjectById(veinMem.container)
             let resourceType;
             let multiplier = 0;
             let remaining = 0;
@@ -382,9 +384,9 @@ const task: any = {
             } else console.log("unknown target kind in delve");
 
             if (resourceType)
-              containerMem.store[resourceType] += Math.min(state.info.workParts * multiplier, remaining);
-            return undefined;
+              containerMem.store[resourceType] += Math.min(state.info.workParts * multiplier, remaining, container?.store.getFreeCapacity(resourceType)||0);
           }
+          return undefined;
         default:
           console.log("Unhandled error in delve! " + JSON.stringify(command) + " " + result);
           break;

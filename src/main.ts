@@ -42,6 +42,7 @@ declare global {
     readonly target: Id<AnyStoreStructure>;
     readonly pos: RoomPosition;
     amount: number;
+    resourceType: ResourceConstant | "any";
     priority: number;
     rank: number;
     tick: number;
@@ -189,9 +190,7 @@ class Tools {
   }
   public IsTransferJob<T extends Object>(
     obj: T
-  ): obj is {
-    store: StoreDefinition | StoreDefinitionUnlimited | Store<ResourceConstant, false>;
-  } & T {
+  ): obj is TransferJob & T {
     return "type" in obj && obj.type == "deliver";
   }
   public BodyCost = function (body: BodyPartConstant[]) {
@@ -279,11 +278,14 @@ class MapInfo {
         });
       }
     }
+    roomMem.enemyPresence = false
     //todo fix source workparts to be proper per room regen rate
     let username = Game.rooms[roomID].controller?.owner?.username;
     if (username && username != "Temoffy") {
       roomMem.enemyPresence = true;
     }
+    if(room.find(FIND_HOSTILE_CREEPS).length>0 && !(username && username == "Temoffy")) roomMem.enemyPresence = true
+
 
     for (let container in roomMem.containers) {
       if (!Game.getObjectById(container)) {
@@ -327,7 +329,7 @@ class MapInfo {
         if (container instanceof Ruin || container instanceof Tombstone) {
           if (container.store?.getUsedCapacity() == 0) continue;
           rank = 0;
-        } else if (container instanceof StructureContainer) rank = 2;
+        } else if (container instanceof StructureStorage) rank = 2;
         for (let id in container.store) {
           store[id] = container.store[id as ResourceConstant];
         }
@@ -641,7 +643,7 @@ export const loop = ErrorMapper.wrapLoop(() => {
           let workerNum = workers.length;
           let creepCost = 200.0; //one move, one work, one carry
           if (
-            workerNum < 6 &&
+            workerNum < 4 &&
             !spawner.spawning &&
             energy >= 200 &&
             (workerNum < 2 || energy >= energyCap - (energyCap % creepCost))
@@ -662,9 +664,30 @@ export const loop = ErrorMapper.wrapLoop(() => {
           }
 
           let mobileHarvesters = _.filter(states, entity => entity.type == "creep" && entity.role == "mobileHarvester");
-          if (energy >= 550 && mobileHarvesters.length < 4) {
+          if (energy >= 550 && mobileHarvesters.length < 5) {
             let partList = [WORK, WORK, WORK, WORK, WORK, MOVE];
             let creepName = names[Math.round(Game.time / 20) % names.length] + (Game.time % 20) + "-mh";
+            spawner.spawnCreep(partList, creepName);
+            global.scheduler.stateUpdate++;
+            global.scheduler.jobRest++;
+          }
+
+          let haulers = _.filter(
+            states,
+            entity => entity.type == "creep" && (entity.role == "hauler")
+          )
+          creepCost = global.tools.BodyCost([CARRY,CARRY,MOVE])
+          if(haulers.length<4 && energy>creepCost){
+            let partList: BodyPartConstant[] = [];
+            let partNum = energy / creepCost;
+            let i = 1;
+            while (i <= partNum && i < 8) {
+              partList.unshift(CARRY);
+              partList.unshift(CARRY);
+              partList.push(MOVE);
+              i++;
+            }
+            let creepName = names[Math.round(Game.time / 20) % names.length] + (Game.time % 20) + "-h";
             spawner.spawnCreep(partList, creepName);
             global.scheduler.stateUpdate++;
             global.scheduler.jobRest++;

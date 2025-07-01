@@ -28,6 +28,8 @@ function getEnergy(creep: Creep, creepState: CreepState) {
   let choiceRoom = undefined;
   for (let roomId in map) {
     let roomMem = map[roomId];
+    if(roomMem.enemyPresence) continue
+
     for (let storeId in roomMem.containers) {
       let storeMem = roomMem.containers[storeId];
       if (
@@ -116,7 +118,7 @@ function getEnergy(creep: Creep, creepState: CreepState) {
 }
 
 function workerFilter(job: Job) {
-  return job.type != "delve";
+  return job.type != "delve" && job.type != "deliver" ;
 }
 
 function plan(creep: Creep, state: CreepState, jobList: Job[]) {
@@ -134,7 +136,6 @@ function plan(creep: Creep, state: CreepState, jobList: Job[]) {
   let targetPos = plannedPos;
   let energy = state.info.cargo[RESOURCE_ENERGY]||0;
   if (energy < creep.store.getCapacity() / 3) {
-
     let plannedPos = getEnergy(creep, state);
     if (!plannedPos) {
       return false;
@@ -142,7 +143,7 @@ function plan(creep: Creep, state: CreepState, jobList: Job[]) {
     return true;
   }
   while (energy > 0) {
-    let myJob = jobBoard.getJob(jobList, workerFilter, creep.store.getCapacity(), plannedPos, targetPos);
+    let {job:myJob, score:discard} = jobBoard.getJob(jobList, workerFilter,state.info.cargo||{}, creep.store.getCapacity(), 4, plannedPos, targetPos);
     if (!myJob) {
       return false;
     }
@@ -196,7 +197,7 @@ const worker = {
         plan(creep, creepState, jobList);
       }
       if (creepState.commands.length == 0) {
-        creep.say("❌🛠, 💔", true);
+        creep.say("❌🛠, 💔. "+loop, true);
         return "noWork";
       }
 
