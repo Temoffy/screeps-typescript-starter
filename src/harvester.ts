@@ -15,9 +15,7 @@ function plan(creep: Creep, state: CreepState, jobList: Job[]) {
   //console.log("harvest planning")
 
   let plannedPos = creep.pos;
-  let myJob = jobBoard.getJob(jobList, harvestFilter, creep.getActiveBodyparts(WORK), plannedPos, plannedPos) as
-    | HarvestJob
-    | boolean;
+  let {job:myJob, score:discard} = jobBoard.getJob(jobList, harvestFilter, state.info.cargo||{}, 4, creep.getActiveBodyparts(WORK), plannedPos, plannedPos)
   if (!myJob) {
     return false;
   }
@@ -77,17 +75,7 @@ const harvester = {
     resolveTask = false;
     let command = creepState.commands[0]
     resolveTask = task[command.type].run(creep, creepState)
-    /*switch (creepState.commands[0].type) {
-      case "delve":
-        if (staticHarvest(creep, creepState)) {
-          creep.say("⛏⛏⛏??", true);
-          resolveTask = true;
-        }
-        break;
-      default:
-        console.log("unknown jobtype in creepstate:", JSON.stringify(creepState));
-    }*/
-    resolveMessage = task[command.type].resolve(creepState,jobList,resolveTask)//resolve(creepState, jobList, true);
+    if(resolveTask!=undefined) resolveMessage = task[command.type].resolve(creepState,jobList,resolveTask)
     return resolveMessage;
   },
   remove(creepState: CreepState, jobs: Job[]) {

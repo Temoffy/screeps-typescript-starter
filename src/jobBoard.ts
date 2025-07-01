@@ -79,6 +79,7 @@ function getTransferJobs(jobs: Job[]) {
         target: item.id,
         pos: item.pos,
         amount: item.store.getFreeCapacity(RESOURCE_ENERGY),
+        resourceType: RESOURCE_ENERGY,
         rank: MY_NUMS.END_USER_RANK,
         priority: MY_NUMS.TRANSFER_PRIORITY,
         tick: Game.time,
@@ -298,6 +299,8 @@ const jobBoard = {
   getJob(
     jobs: Job[],
     jobFilter: (value: Job) => unknown,
+    storage: { [key: string]: number },
+    rankMin: number,
     workparts: number,
     origin1: RoomPosition,
     origin2: RoomPosition
@@ -306,43 +309,53 @@ const jobBoard = {
     filteredJobs = filteredJobs.filter(job => job.amount >= 0);
 
     if (!filteredJobs.length || filteredJobs.length == 0) {
-      return false;
+      return {job: undefined, score: 0};
     }
 
     let chosenJob: Job | undefined = undefined;
     let chosenPriority = -999999;
     for (let job of filteredJobs) {
+      if(global.map.rooms[job.pos.roomName] && global.map.rooms[job.pos.roomName].enemyPresence) continue
       let distance = 0;
       let target;
       let priority = job.priority;
-      if (job.type == "restore") {
-        target = Game.getObjectById(job.target[0] as Id<AnyStructure>);
-        let repairdistance = 999;
-        for (let repairtarget of job.target) {
-          let targettemp = Game.getObjectById(repairtarget as Id<AnyStructure>);
-          if (
-            targettemp &&
-            global.map.maxDistance(targettemp.pos, origin1) + global.map.maxDistance(targettemp.pos, origin2) <
-              repairdistance
-          ) {
-            repairdistance =
-              global.map.maxDistance(targettemp.pos, origin1) + global.map.maxDistance(targettemp.pos, origin2);
-            target = targettemp;
+      switch (job.type) {
+        case "restore":
+          target = Game.getObjectById(job.target[0] as Id<AnyStructure>);
+          let repairdistance = 999;
+          for (let repairtarget of job.target) {
+            let targettemp = Game.getObjectById(repairtarget as Id<AnyStructure>);
+            if (
+              targettemp &&
+              global.map.maxDistance(targettemp.pos, origin1) + global.map.maxDistance(targettemp.pos, origin2) <
+                repairdistance
+            ) {
+              repairdistance =
+                global.map.maxDistance(targettemp.pos, origin1) + global.map.maxDistance(targettemp.pos, origin2);
+              target = targettemp;
+            }
           }
-        }
-      } else if (job.type == "delve") {
-        job = job as HarvestJob;
-        if (job.active > 0) {
-          continue;
-        }
-        if (job.amount != workparts && chosenPriority == -999999) {
-          priority = -999900;
-        }
-        target = { pos: new RoomPosition(job.pos.x, job.pos.y, job.pos.roomName) };
-      } else {
-        target = Game.getObjectById(job.target as Id<AnyStructure>);
+          break;
+        case "delve":
+          job = job as HarvestJob;
+          if (job.active > 0) {
+            continue;
+          }
+          if (job.amount != workparts && chosenPriority == -999999) {
+            priority = -999900;
+          }
+          target = { pos: job.pos}//new RoomPosition(job.pos.x, job.pos.y, job.pos.roomName) };
+          break
+        case "deliver":
+          if(!(storage[(job as TransferJob).resourceType] > 0) && (job as TransferJob).resourceType != 'any' ) continue
+          if (rankMin > (job as TransferJob).rank) continue
+          target = {pos: job.pos}
+          break
+        default:
+          target = {pos: job.pos}//Game.getObjectById(job.target as Id<AnyStructure>);
+          break;
       }
-      if (target != null) {
+      if (target) {
         distance = global.map.maxDistance(target.pos, origin1) + global.map.maxDistance(target.pos, origin2);
       }
       let age = 0;
@@ -354,7 +367,7 @@ const jobBoard = {
       }
     }
 
-    return chosenJob;
+    return {job:chosenJob, score:chosenPriority};
   },
 
   getJobFromID(jobs: Job[], id: number) {
