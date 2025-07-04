@@ -150,6 +150,7 @@ declare global {
     readonly pos: RoomPosition;
     rank: number;
     store: { [key: string]: number };
+    max: number
     active: number;
   };
   type MineralsMem = {
@@ -176,7 +177,20 @@ declare global {
       tools: Tools;
       map: MapInfo;
       scheduler: Scheduler;
+      mover: Mover
     }
+  }
+}
+
+class Mover{
+  public Move(creep:Creep, pos:RoomPosition){
+
+  }
+  public Log(){
+
+  }
+  public Go(){
+
   }
 }
 
@@ -338,6 +352,7 @@ class MapInfo {
           pos: container.pos,
           rank: rank,
           store: store,
+          max: container.store.getCapacity()||0,
           active: 0
         };
       }
@@ -369,6 +384,7 @@ class MapInfo {
           });
           if (containers.length > 0) {
             item.container = containers[0].id as Id<AnyStoreStructure>;
+            roomMem.containers ? (roomMem.containers[containers[0].id].rank = 1) : undefined;
           } else {
             item.container = undefined;
           }
@@ -477,9 +493,9 @@ const names = [
   "Gerald"
 ];
 //data not about my units, array of rooms
-Memory.states = [];
+/*Memory.states = [];
 Memory.jobs = [];
-Memory.roomInfo = {};
+Memory.roomInfo = {};*/
 global.map = new MapInfo();
 global.map.updateMap();
 //track entities and their info, every state associative array must have a type and id property
@@ -490,7 +506,7 @@ jobBoard.update(jobs);
 
 class Scheduler {
   //all rest variables must be <=0
-  health = 0;
+  health = 1;
   jobUpdate = 1;
   jobRest = -10;
   stateUpdate = 1;
@@ -499,17 +515,17 @@ class Scheduler {
   mapRest = 0;
 
   startTick() {
-    /*if(this.health < -2){
+    if(this.health < 1){
       console.log("code sick, kill it")
       states = []
       Memory.states = []
       jobs = []
       Memory.jobs = []
-      map = {}
-      Memory.map = {}
+      Memory.roomInfo = {}
+      global.map = new MapInfo
       this.health = 0
       return
-    }*/
+    }
     this.health--;
     if (this.mapUpdate < 0) {
       this.mapUpdate++;
@@ -564,9 +580,6 @@ class Scheduler {
 
     //confirms code completed, see top of loop
     this.health++; //counteract -- at the top
-    if (this.health < 0) {
-      this.health += 0.5; //bring back towards 0
-    }
     Memory.states = states;
     Memory.jobs = jobs;
     Memory.roomInfo = global.map.rooms;
@@ -664,10 +677,15 @@ export const loop = ErrorMapper.wrapLoop(() => {
           }
 
           let mobileHarvesters = _.filter(states, entity => entity.type == "creep" && entity.role == "mobileHarvester");
-          if (energy >= 550 && mobileHarvesters.length < 5) {
-            let partList = [WORK, WORK, WORK, WORK, WORK, MOVE];
+          let mhCost = 550
+          let mhPartList = [WORK, WORK, WORK, WORK, WORK, MOVE]
+          if(mobileHarvesters.length<1){
+            mhCost = 250
+            mhPartList = [WORK,WORK,MOVE]
+          }
+          if (energy >= mhCost && mobileHarvesters.length < 5 ) {
             let creepName = names[Math.round(Game.time / 20) % names.length] + (Game.time % 20) + "-mh";
-            spawner.spawnCreep(partList, creepName);
+            spawner.spawnCreep(mhPartList, creepName);
             global.scheduler.stateUpdate++;
             global.scheduler.jobRest++;
           }
@@ -677,7 +695,7 @@ export const loop = ErrorMapper.wrapLoop(() => {
             entity => entity.type == "creep" && (entity.role == "hauler")
           )
           creepCost = global.tools.BodyCost([CARRY,CARRY,MOVE])
-          if(haulers.length<4 && energy>creepCost){
+          if((haulers.length<4 && energy>creepCost*3) || (haulers.length<1 && energy>creepCost)){
             let partList: BodyPartConstant[] = [];
             let partNum = energy / creepCost;
             let i = 1;

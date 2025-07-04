@@ -14,7 +14,7 @@ const task: any = {
       let target = Game.getObjectById(command.target) as AnyCreep | AnyStoreStructure | Tombstone | Ruin | Resource;
       if (!target) {
         if (!Game.rooms[command.pos.roomName]) {
-          hauler.moveTo(command.pos, { visualizePathStyle: { stroke: "#fcba03" } });
+          hauler.moveTo(new RoomPosition(command.pos.x,command.pos.y,command.pos.roomName), { visualizePathStyle: { stroke: "#fcba03" } });
           return undefined;
         }
         console.log(command.type + " target not found! " + JSON.stringify(command));
@@ -112,7 +112,7 @@ const task: any = {
       let target = Game.getObjectById(command.target);
       if (!target) {
         if (!Game.rooms[command.pos.roomName]) {
-          mason.moveTo(command.pos, { visualizePathStyle: { stroke: "#fcba03" } });
+          mason.moveTo(new RoomPosition(command.pos.x,command.pos.y,command.pos.roomName), { visualizePathStyle: { stroke: "#fcba03" } });
           return undefined;
         }
         return true;
@@ -194,7 +194,7 @@ const task: any = {
       let target = Game.getObjectById(command.target);
       if (!target) {
         if (!Game.rooms[command.pos.roomName]) {
-          smith.moveTo(command.pos, { visualizePathStyle: { stroke: "#fcba03" } });
+          smith.moveTo(new RoomPosition(command.pos.x,command.pos.y,command.pos.roomName), { visualizePathStyle: { stroke: "#fcba03" } });
           return undefined;
         }
         console.log("somehow a controller has vanished??");
@@ -260,7 +260,7 @@ const task: any = {
       let target = Game.getObjectById(command.target);
       if (!target) {
         if (!Game.rooms[command.pos.roomName]) {
-          miner.moveTo(command.pos, { visualizePathStyle: { stroke: "#fcba03" } });
+          miner.moveTo(new RoomPosition(command.pos.x,command.pos.y,command.pos.roomName), { visualizePathStyle: { stroke: "#fcba03" } });
           return undefined;
         }
         return true;
@@ -318,7 +318,7 @@ const task: any = {
       let target = Game.getObjectById(command.target);
       if (!target) {
         if (!Game.rooms[command.pos.roomName]) {
-          delver.moveTo(command.pos, { visualizePathStyle: { stroke: "#fcba03" } });
+          delver.moveTo(new RoomPosition(command.pos.x,command.pos.y,command.pos.roomName), { visualizePathStyle: { stroke: "#fcba03" } });
           return undefined;
         }
         return true;
@@ -345,7 +345,7 @@ const task: any = {
       }
 
       if (global.map.maxDistance(delver.pos, pos) > dist || command.pos.roomName != delver.pos.roomName) {
-        delver.moveTo(pos, { visualizePathStyle: { stroke: "#fcba03" } });
+        delver.moveTo(new RoomPosition(pos.x,pos.y,pos.roomName), { visualizePathStyle: { stroke: "#fcba03" } });
         return undefined;
       }
 
@@ -383,8 +383,14 @@ const task: any = {
               remaining = target.mineralAmount;
             } else console.log("unknown target kind in delve");
 
-            if (resourceType)
-              containerMem.store[resourceType] += Math.min(state.info.workParts * multiplier, remaining, container?.store.getFreeCapacity(resourceType)||0);
+            if (resourceType){
+              global.map.containerAdd.push({
+                roomId: containerMem.pos.roomName,
+                containerId: container?.id as Id<AnyStoreStructure>,
+                type: resourceType,
+                amount: Math.min(state.info.workParts * multiplier, remaining, container?.store.getFreeCapacity(resourceType)||0)
+              });
+            }
           }
           return undefined;
         default:
@@ -396,7 +402,7 @@ const task: any = {
     resolve(state: CreepState, jobs: Job[], successful: boolean) {
       let command = state.commands[0];
       //job
-      if (command.job != null) {
+      if (command.job) {
         let refJob = jobBoard.getJobFromID(jobs, command.job);
         if (refJob) {
           refJob.active--;
@@ -425,7 +431,7 @@ const task: any = {
       let target = Game.getObjectById(command.target) as AnyStructure;
       if (!target || target.hits == target.hitsMax) {
         if (!Game.rooms[command.pos.roomName]) {
-          custodian.moveTo(command.pos, { visualizePathStyle: { stroke: "#fcba03" } });
+          custodian.moveTo(new RoomPosition(command.pos.x,command.pos.y,command.pos.roomName), { visualizePathStyle: { stroke: "#fcba03" } });
           return undefined;
         }
         let targetList = custodian.room.find(FIND_STRUCTURES, {
@@ -492,7 +498,7 @@ const task: any = {
       let target = Game.getObjectById(command.target);
       if (!target) {
         if (!Game.rooms[command.pos.roomName]) {
-          h.moveTo(command.pos);
+          h.moveTo(new RoomPosition(command.pos.x,command.pos.y,command.pos.roomName));
           return undefined;
         }
         return true;
@@ -532,7 +538,7 @@ const task: any = {
       let target = Game.getObjectById(command.target);
       if (!target) {
         if (!Game.rooms[command.pos.roomName]) {
-          h.moveTo(command.pos);
+          h.moveTo(new RoomPosition(command.pos.x,command.pos.y,command.pos.roomName));
           return undefined;
         }
         return true;
@@ -572,7 +578,7 @@ const task: any = {
       let target = Game.getObjectById(command.target);
       if (!target) {
         if (!Game.rooms[command.pos.roomName]) {
-          h.moveTo(command.pos);
+          h.moveTo(new RoomPosition(command.pos.x,command.pos.y,command.pos.roomName));
           return undefined;
         }
         return true;
@@ -612,7 +618,7 @@ const task: any = {
       let target = Game.getObjectById(command.target);
       if (!target) {
         if (!Game.rooms[command.pos.roomName]) {
-          h.moveTo(command.pos);
+          h.moveTo(new RoomPosition(command.pos.x,command.pos.y,command.pos.roomName));
           return undefined;
         }
         return true;

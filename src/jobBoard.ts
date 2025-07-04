@@ -40,12 +40,15 @@ function cleanList(jobs: Job[]) {
           k = k - 1;
         }
       }
-      if (job.target.length == 0) {
-        console.log("restore detected in cleanlist");
-        jobs.splice(i, 1);
-        i = i - 1;
-        continue;
+    } else if(job.type == "deliver" && job.active == 0){
+      let containerMem = global.map.rooms[job.pos.roomName]?.containers[job.target as string]
+      if(!containerMem) continue
+
+      let currentStore = 0
+      for(let q in containerMem.store){
+        currentStore+=containerMem.store[q]
       }
+      if(containerMem.max-currentStore > job.amount) job.amount = containerMem.max-currentStore
     }
   }
 }
@@ -87,6 +90,39 @@ function getTransferJobs(jobs: Job[]) {
         id: getID(jobs)
       };
       jobs.push(newJob);
+    }
+  }
+
+  for(let i in global.map.rooms){
+    let roomMem = global.map.rooms[i]
+    for(let k in roomMem.containers){
+      let containerMem = roomMem.containers[k]
+      let repeat = false
+      if(containerMem.rank<2 || containerMem.max==0) continue
+      for(let job of jobs){
+        if(k == job.target && job.type=="deliver"){
+          repeat = true
+          break
+        }
+      }
+      if(repeat)continue
+      let currentStore = 0
+      for(let q in containerMem.store){
+        currentStore+=containerMem.store[q]
+      }
+      let newJob: TransferJob = {
+        type: "deliver",
+        target: k as Id<AnyStoreStructure>,
+        pos: containerMem.pos,
+        amount: containerMem.max-currentStore,
+        resourceType: 'any',
+        rank: containerMem.rank,
+        priority: 0,
+        tick: Game.time,
+        active: 0,
+        id: getID(jobs)
+      };
+      jobs.push(newJob)
     }
   }
 }
@@ -255,7 +291,7 @@ function getStaticHarvestJobs(jobs: Job[]) {
           pos: mineral.pos,
           amount: workparts,
           tick: 0,
-          priority: MY_NUMS.LT_HARVEST_PRIORITY,
+          priority: MY_NUMS.LT_HARVEST_PRIORITY-20,
           active: 0,
           id: getID(jobs)
         };
@@ -321,6 +357,7 @@ const jobBoard = {
       let priority = job.priority;
       switch (job.type) {
         case "restore":
+          if(job.target.length<1) continue
           target = Game.getObjectById(job.target[0] as Id<AnyStructure>);
           let repairdistance = 999;
           for (let repairtarget of job.target) {

@@ -148,23 +148,25 @@ function plan(creep: Creep, state: CreepState, jobList: Job[]) {
       return false;
     }
     let eAmount;
+    let target = myJob.target
     if (myJob.type == "restore") {
+      target = myJob.target[0] as Id<AnyStoreStructure>
       eAmount = energy;
     } else {
       eAmount = Math.min(energy, myJob.amount);
     }
     let newCommand: Command = {
       type: myJob.type,
-      target: myJob.target as Id<AnyStoreStructure> /*jank todo*/,
+      target: target as Id<AnyStoreStructure> /*jank todo*/,
       pos: myJob.pos,
       amount: eAmount,
       resourceType: RESOURCE_ENERGY,
       job: myJob.id
     };
-    state.commands.push(newCommand);
     myJob.amount -= eAmount;
     myJob.active++;
     energy -= eAmount;
+    state.commands.push(newCommand);
 
     targetPos = myJob.pos;
   }
