@@ -15,7 +15,6 @@ function getMostCargoType(store: { [key: string]: number }){
       amount = store[i]
     }
   }
-  console.log("most"+most+amount)
   return most as ResourceConstant
 }
 
@@ -51,7 +50,6 @@ function Plan(creep: Creep, state: CreepState, jobList: Job[]) {
         for (let resource in roomMem.containers[i].store) {
           if (roomMem.containers[i].store[resource] > 0) {
             sum += roomMem.containers[i].store[resource];
-            break;
           }
         }
         if (sum==0 || (sum<creep.store.getCapacity()&&roomMem.containers[i].rank>0)) continue;
@@ -107,8 +105,6 @@ function Plan(creep: Creep, state: CreepState, jobList: Job[]) {
   let maxAmount = creep.store.getCapacity();
   resourceType = targetJob.resourceType
   if(resourceType == 'any') {
-    console.log('fore')
-    console.log(targetJob.amount)
     resourceType = getMostCargoType(targetStorage.mem.store)
   }
   if(resourceType == undefined){
@@ -117,10 +113,9 @@ function Plan(creep: Creep, state: CreepState, jobList: Job[]) {
   }
   let currentAmount = Math.min(maxAmount, targetJob.amount, targetStorage.mem.store[resourceType]);
 
-  let targetList = [ {job:targetJob,amount:currentAmount,resourceType:resourceType} ];
   targetJob.amount -= currentAmount;
   targetJob.active++;
-  console.log(targetJob.amount)
+  let targetList = [ {job:targetJob,amount:currentAmount,resourceType:resourceType} ];
 
   let newAmount = currentAmount
   if (currentAmount != maxAmount) {
@@ -152,8 +147,6 @@ function Plan(creep: Creep, state: CreepState, jobList: Job[]) {
       resourceType = undefined
       resourceType = targetJob.resourceType
       if(resourceType == 'any') {
-        console.log('fore')
-        console.log(targetJob.amount)
         resourceType = getMostCargoType(simStorage)
       }
       if(resourceType == undefined){
@@ -162,12 +155,10 @@ function Plan(creep: Creep, state: CreepState, jobList: Job[]) {
       }
 
       newAmount = Math.min(maxAmount - currentAmount, targetJob.amount, simStorage[resourceType]);
-      targetList.push({job:targetJob, amount:newAmount,resourceType:resourceType});
       currentAmount+=newAmount
-      console.log("pre"+targetJob.amount+" "+newAmount)
       targetJob.amount -= newAmount;
       targetJob.active++;
-      console.log("post"+targetJob.amount)
+      targetList.push({job:targetJob, amount:newAmount,resourceType:resourceType});
     }
   }
 
@@ -202,9 +193,9 @@ function Plan(creep: Creep, state: CreepState, jobList: Job[]) {
         amount: simStorage[i],
         resourceType: i as ResourceConstant,
       }
-      state.commands.unshift(newCommand)
       targetStorage.mem.store[i] += simStorage[i];
       targetStorage.mem.active++;
+      state.commands.unshift(newCommand)
     }
   }
 

@@ -27,8 +27,8 @@ function plan(creep: Creep, state: CreepState, jobList: Job[]) {
     amount: 0,
     job: myJob.id
   };
-  state.commands.push(newCommand);
   myJob.active++;
+  state.commands.push(newCommand);
 
   let targetSource = global.map.getSourceFromID(myJob.target);
   if (targetSource) {
