@@ -204,6 +204,8 @@ class WorldAtlas {
       }
     }
 
+    roomAtlas.carveSites = carveSites;
+
     // containers
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const containers: (AnyStoreStructure|Tombstone|Ruin)[] = room.find(FIND_STRUCTURES, {filter: s => s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_STORAGE}) as (AnyStoreStructure)[];

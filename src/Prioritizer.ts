@@ -1,22 +1,22 @@
 interface Todo {
-    func: () => number;
-    score: number;
-    readonly priority: number;
-    cpuCost: number;
-    interval: number;
-    readonly ogInterval: number;
-    lastExecuted: number;
     readonly name: string;
+    readonly func: () => number;
+    readonly priority: number;
+    readonly ogInterval: number;
+    interval: number;
+    score: number;
+    cpuCost: number;
+    lastExecuted: number;
 }
 
 // maximise score per cpu, where score is priority*number returned from func (qualitatively, how much it achieved).
 class Prioritizer {
     private scheduled: Todo[] = [];
     private avePercentile = 0.7; // not exact, actual is higher. close 'nuff.
-    private cpuLimit: number = Game.cpu.limit || 20;
-    private convergence: number = 1/50;
+    private cpuLimit = Game.cpu.limit || 20;
+    private convergence = 1/50;
 
-    private lastBucket: number = Game.cpu.bucket;
+    private lastBucket = Game.cpu.bucket;
 
     private runCount = 0;
 

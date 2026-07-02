@@ -5,7 +5,6 @@ screeps bot rewrite based on https://github.com/screepers/screeps-typescript-sta
 reason: had enough of type errors in runtime
 */
 
-import { ErrorMapper } from "./utils/ErrorMapper";
 import jobBoard from "./jobBoard";
 import worker from "./worker";
 import pioneer from "./pioneer";

@@ -153,7 +153,7 @@ class JobBoard {
       jobs = jobs.filter(j => j.type !== "carve" || j.pos.roomName !== roomName || carveSites[j.target ]);
 
       for (const siteId in carveSites) {
-        let priority = 10
+        let priority = 2
         const realsite = Game.getObjectById(siteId as Id<ConstructionSite>);
         if (realsite) {
           priority += realsite.progress / realsite.progressTotal;
@@ -186,12 +186,13 @@ class JobBoard {
     const restoreJobs = jobs.filter(j => j.type === "restore");
     for (const roomName in g.atlas.rooms) {
       const roomAtlas = g.atlas.rooms[roomName];
-      if (roomAtlas.control < CtrlLvl.tentative) continue;
+      const room = Game.rooms[roomName]
+      if (roomAtlas.control < CtrlLvl.tentative || !room) continue;
 
       // get all mine and neutral structures.
       const filter = (s: Structure) => s.hits < s.hitsMax;
-      let structs = Game.rooms[roomName].find(FIND_STRUCTURES, { filter });
-      const enemyStructs = Game.rooms[roomName].find(FIND_HOSTILE_STRUCTURES, { filter });
+      let structs = room.find(FIND_STRUCTURES, { filter });
+      const enemyStructs = room.find(FIND_HOSTILE_STRUCTURES, { filter });
       const enemyIds = new Set<string>(enemyStructs.map(s => s.id));
       structs = structs.filter(s => !enemyIds.has(s.id));
       const structIds = new Set<string>(structs.map(s => s.id));
@@ -203,27 +204,23 @@ class JobBoard {
       // todo: make updateRoom function set goal to 60% of lowest wall in room?
       // ^ to detect and respond to damage.
       for (const struct of structs) {
-        let priority = 10;
-        let missingHits = struct.hitsMax - struct.hits;
-        if (missingHits < 1000 && missingHits / struct.hitsMax < 0.6) continue; // don't waste time on small repairs
+        let priority = 1;
+        const missingHits = struct.hitsMax - struct.hits;
+        let percentMultiplier = missingHits / struct.hitsMax;
+        if (missingHits < 2000 && percentMultiplier < 0.6) continue; // don't waste time on small repairs
         if (struct.structureType === STRUCTURE_WALL || struct.structureType === STRUCTURE_RAMPART) {
           const goal = roomAtlas.wallGoal || 500000;
-          if (struct.hits < goal) {
-            missingHits = goal - struct.hits;
-          } else {
-            priority = goal / (struct.hits * 2);
-            if (priority < 0.1) continue;
-            missingHits = Math.floor(goal / 2);
-          }
-        } else {
-          priority = .5 * struct.hitsMax / struct.hits; // priority 1 at half damage, priority 2 at 75% damage, etc.
+          percentMultiplier = Math.max((goal - struct.hits) / goal, percentMultiplier*0.05);
+
+          if (percentMultiplier < 0.05) continue;
         }
+        priority = Math.max( 1 + 0.5*percentMultiplier, struct.hitsMax / (struct.hits*2));
 
         const job = restoreJobs.find(j => j.target === struct.id);
         if (job) {
           if (job.active > 0) continue
-          job.amount = missingHits;
-          job.priority = Math.max(priority, job.priority);
+          job.amount = missingHits/REPAIR_POWER;
+          job.priority = priority;
           continue;
         }
 
@@ -250,10 +247,10 @@ class JobBoard {
     for (const roomName in g.atlas.rooms) {
       const roomAtlas = g.atlas.rooms[roomName];
       const room = Game.rooms[roomName];
-      if (roomAtlas.control < CtrlLvl.colonized || !room.controller) continue;
+      if (roomAtlas.control < CtrlLvl.colonized || !room || !room.controller) continue;
       const controller = room.controller;
 
-      const priority = .5 + 3000 / controller.ticksToDowngrade
+      const priority = 1 + 50000 / controller.ticksToDowngrade
 
       const job = refineJobs.find(j => j.pos.roomName === roomName);
       if (job) {
@@ -262,6 +259,8 @@ class JobBoard {
           job.amount -= (workpartDemand - 15)
           continue;
         }
+        job.priority = 1 + 50000 / controller.ticksToDowngrade
+        continue
       }
 
       const newJob: RefineJob = {
