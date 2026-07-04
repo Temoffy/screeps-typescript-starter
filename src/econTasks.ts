@@ -17,7 +17,7 @@ abstract class Task {
   // return energy/intent estimate for this task
   // todo: account for energy loss from creep aging (don't allocate big creeps to small jobs)
   // be careful, don't touch simdwarf.info.cargo!
-  public abstract efficiency(simDwarf: Dwarf, simStore: SimpleStore, simPos: Pos, job: Job, timeAdjustment?: number): Evaluation;
+  public abstract efficiency(simDwarf: Dwarf, simStore: SimpleStore, simPos: Pos, job: Job, timeAdjustment?: number, resourceType?: ResourceConstant): Evaluation;
   // operate on job and dwarf to create the next command(s) and store in dwarf. Return used resource count
   public abstract claim(dwarf: Dwarf, creep: Creep, job: Job, amount: number, resourceType?: ResourceConstant): number;
   // returns boolean if task is complete, undefined if still in progress
@@ -178,22 +178,30 @@ class DeliverTask extends Task {
       return false;
     }
 
+    const containerTally = g.atlas.rooms[command.pos.roomName].containers[command.target as Id<StructureContainer>];
+
     if (success) {
       const carrying = dwarf.info.cargo[command.resourceType] || 0;
       dwarf.info.cargo[command.resourceType] = carrying - command.amount;
-    }
 
-    const containerTally = g.atlas.rooms[command.pos.roomName].containers[command.target as Id<StructureContainer>];
-    if (containerTally) {
-      if (command.amount > 0 && success) {
-        g.atlas.LogContainerAdd({ roomId: command.pos.roomName, containerId: command.target as Id<StructureContainer>, amount: command.amount, type: command.resourceType })
-      } else {
-        containerTally.active--;
-        if (!success) {
-          containerTally.store[command.resourceType] = (containerTally.store[command.resourceType] || command.amount) - command.amount;
+      if(containerTally){
+        if(command.amount > 0){
+          g.atlas.LogContainerAdd({ roomId: command.pos.roomName, containerId: command.target as Id<StructureContainer>, amount: command.amount, type: command.resourceType })
+        } else{
+          containerTally.active--;
+        }
+      }
+    } else{
+      if(containerTally){
+        if(command.amount > 0){
+          // nan
+        } else{
+          containerTally.store[command.resourceType] = (containerTally.store[command.resourceType] || command.amount) - command.amount
+          containerTally.active--;
         }
       }
     }
+
     let returnAmount = 0
     if (!success) returnAmount = command.amount
     return this.unclaimJob(jobs, command.jobId, returnAmount);

@@ -211,7 +211,7 @@ class WorldAtlas {
     const containers: (AnyStoreStructure|Tombstone|Ruin)[] = room.find(FIND_STRUCTURES, {filter: s => s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_STORAGE}) as (AnyStoreStructure)[];
     const containerEntries = roomAtlas.containers || {};
     for(const container of containers){
-      if(containerEntries[container.id]) continue;
+      if(containerEntries[container.id] && containerEntries[container.id].active !== 0) continue;
 
       containerEntries[container.id] = {
         pos: {x: container.pos.x, y: container.pos.y , roomName: container.pos.roomName},
@@ -247,7 +247,7 @@ class WorldAtlas {
 
     const resourcePiles = room.find(FIND_DROPPED_RESOURCES);
     for (const pile of resourcePiles){
-      if(containerEntries[pile.id]) continue;
+      if(containerEntries[pile.id] && containerEntries[pile.id]?.active !== 0) continue;
       containerEntries[pile.id] = {
         pos: {x: pile.pos.x, y: pile.pos.y , roomName: pile.pos.roomName},
         active: 0,

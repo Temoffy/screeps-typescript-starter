@@ -52,7 +52,7 @@ class EconCarryForeman extends BaseEconForeman {
     private removeDwarfTasks(dwarf: Dwarf) {
         while (dwarf.commands.length > 0) {
             if(!econTasks[dwarf.commands[0].type].complete(dwarf, this.jobs, false)){
-                console.log('failed to properly unclaim')
+                console.log(`failed to properly unclaim ${JSON.stringify(dwarf.commands)}`)
             }
         }
     }
@@ -68,7 +68,7 @@ class EconCarryForeman extends BaseEconForeman {
                 }
                 text.push(`${key.substring(0,3)}: ${JSON.stringify(val)}`);
             }
-            g.hud.makeElement(`${job.id}`, job.pos, text, undefined, {scale: "small"});
+            g.hud.makeElement(`EcCaFo${job.id}`, job.pos, text, undefined, {scale: "small"});
         }
 
         for (const dwarf of this.dwarves) {

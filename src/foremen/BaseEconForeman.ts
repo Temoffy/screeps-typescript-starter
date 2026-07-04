@@ -12,6 +12,7 @@ interface ResourcePlan {
     resourceType: ResourceConstant;
 }
 interface TaskMatrixCell{
+    resourceType: ResourceConstant|undefined,
     evalu: Evaluation,
     plan: ResourcePlan|undefined
 }
@@ -153,9 +154,21 @@ abstract class BaseEconForeman extends BaseForeman {
         // important TODO: after testing the cpu efficiency of the current,
         // replace room search with searching the supplied container lists
         // expect that to do better
-        let best = econTasks[job.type].efficiency(simDwarf, simStore.store, simPos, job);
+        let resourceType = job.resourceType
+        // if(resourceType === "any" && resourcePlan){
+        //     resourceType = resourcePlan.resourceType;
+        // }
+        if(resourceType === "any"){
+            for(const type in simStore.store){
+                if((simStore.store[type as ResourceConstant]||0) > (simStore.store[resourceType as ResourceConstant]||0)){
+                    resourceType = type as ResourceConstant;
+                }
+            }
+        }
 
-        if(job.type === "delve") return {evalu:best, plan:undefined}
+        let best = econTasks[job.type].efficiency(simDwarf, simStore.store, simPos, job, undefined, resourceType==="any"?undefined:resourceType);
+
+        if(job.type === "delve") return {resourceType: resourceType==="any"?undefined:resourceType, evalu:best, plan:undefined}
 
         let rank = MY_NUMS.END_USER_RANK
         if(job.type === "deliver") rank = job.rank
@@ -165,7 +178,7 @@ abstract class BaseEconForeman extends BaseForeman {
 
         // if already planned, or planned wrong resource, or plan fully used, or creep full; return original evaluation, don't mess with it.
         const idealAmount = Math.min(availableCarry, econTasks[job.type].maxResource(job));
-        if(idealAmount <= 0) return {evalu:best, plan:undefined}
+        if(idealAmount <= 0) return {resourceType: resourceType==="any"?undefined:resourceType, evalu:best, plan:undefined}
 
         let plan: ResourcePlan = {visits: [], available: 0, planUse: 0, resourceType: job.resourceType as ResourceConstant}
         const testedSources = new Set()
@@ -178,18 +191,7 @@ abstract class BaseEconForeman extends BaseForeman {
             const container = g.atlas.rooms[testSource.roomName]?.containers[testSource.id]
             if(!container) continue
 
-            let resourceType = job.resourceType
-            // if(resourceType === "any" && resourcePlan){
-            //     resourceType = resourcePlan.resourceType;
-            // }
-            if(resourceType === "any"){
-                for(const type in simStore.store){
-                    if((simStore.store[type as ResourceConstant]||0) > 0){
-                        resourceType = type as ResourceConstant;
-                        break;
-                    }
-                }
-            }
+
             if(resourceType === "any"){
                 let max=0;
                 let bestType: ResourceConstant | undefined;
@@ -211,7 +213,7 @@ abstract class BaseEconForeman extends BaseForeman {
             const containerPos = container.pos;
             const timeAdjustment = Tools.maxDistance(simPos, containerPos);
             simStore.store[resourceType] = actualAmount + (simStore.store[resourceType] || 0);
-            const test = econTasks[job.type].efficiency(simDwarf, simStore.store, containerPos, job, timeAdjustment);
+            const test = econTasks[job.type].efficiency(simDwarf, simStore.store, containerPos, job, timeAdjustment, resourceType);
             simStore.store[resourceType]! -= actualAmount;
 
             if(test.score > best.score){
@@ -225,7 +227,7 @@ abstract class BaseEconForeman extends BaseForeman {
         }
         resourcePlan.visits.push(...plan.visits)
         resourcePlan.available += plan.available;
-        return {evalu:best, plan:resourcePlan};
+        return {resourceType: resourceType==="any"?undefined:resourceType, evalu:best, plan:resourcePlan};
     }
 
     protected assignTasksByMatrix(jobAxis: Job[], dwarfAxis: Dwarf[]) {
@@ -300,8 +302,8 @@ abstract class BaseEconForeman extends BaseForeman {
                 const fakejob = {type:"deliver", target: visit.id, pos: g.atlas.rooms[visit.roomName].containers[visit.id].pos, amount:-visit.amount, resourceType: resourcePlan!.resourceType, priority: -1, rank:-1, tick:-1, active:-1, id:-1} as Job;
                 econTasks.deliver.claim(chosenDwarfRow.dwarf, Game.getObjectById(chosenDwarfRow.dwarf.id)!, fakejob, -visit.amount, resourcePlan!.resourceType);
             }
-            const claimedResourceAmount = econTasks[chosenJobRow.job.type].claim(chosenDwarfRow.dwarf, Game.getObjectById(chosenDwarfRow.dwarf.id)!, chosenJobRow.job, taskMatrix[best.i][best.j].evalu.amount);
-            const resource = resourcePlan?.resourceType || chosenDwarfRow.dwarf.commands[chosenDwarfRow.dwarf.commands.length-1].resourceType
+            const resource = resourcePlan?.resourceType || taskMatrix[best.i][best.j].resourceType || RESOURCE_ENERGY
+            const claimedResourceAmount = econTasks[chosenJobRow.job.type].claim(chosenDwarfRow.dwarf, Game.getObjectById(chosenDwarfRow.dwarf.id)!, chosenJobRow.job, taskMatrix[best.i][best.j].evalu.amount, resource);
             if(resourcePlan){
                 tMatxDwarfwise[best.i].simStore.store[resource] = resourcePlan.available + (tMatxDwarfwise[best.i].simStore.store[resource] || 0)
             }
