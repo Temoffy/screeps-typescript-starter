@@ -1,5 +1,7 @@
 // import Tools from "utils/Tools";
 
+// WorldAtlas.ts
+
 import { Tools } from "utils/Tools";
 import { MY_NUMS } from "JobBoard";
 
@@ -69,7 +71,11 @@ class WorldAtlas {
   private containerAdd: ContainerAdd[] = [];
 
   private ReadMem() {
-    const rooms: RoomsAtlas = Memory.worldAtlas as RoomsAtlas || {};
+    const rooms1: RoomsAtlas = {}
+    return rooms1
+
+    // ONLY RE-ENABLE AFTER HANDLING SAVE-LOAD FOR JOBS AND TASKS
+    /* const rooms: RoomsAtlas = Memory.worldAtlas as RoomsAtlas || {};
 
     for (const roomId in rooms) {
       const room = rooms[roomId];
@@ -81,7 +87,7 @@ class WorldAtlas {
       }
     }
 
-    return rooms;
+    return rooms;*/
   }
   public WriteMem() {
     Memory.worldAtlas = {};
@@ -251,23 +257,24 @@ class WorldAtlas {
       containerEntries[pile.id] = {
         pos: {x: pile.pos.x, y: pile.pos.y , roomName: pile.pos.roomName},
         active: 0,
-        rank: MY_NUMS.DISTRIBUTED_BUFFER_RANK,
+        rank: MY_NUMS.UNSTABLE_SOURCE_RANK,
         store: {[pile.resourceType]: pile.amount},
         max: 0
       }
     }
 
     const wrecks = room.find(FIND_TOMBSTONES);
+    // TODO wrecks!
 
     for(const containerId in containerEntries){
-      const container = containers.find(c => c.id === containerId);
+      const container = Game.getObjectById(containerId as Id<AnyStoreStructure|Resource>)
       if(!container){
         delete containerEntries[containerId as Id<AnyStoreStructure>]
         continue;
       }
 
       if(containerEntries[containerId as Id<AnyStoreStructure>].active === 0){
-        containerEntries[containerId as Id<AnyStoreStructure>].store = container.store;
+        containerEntries[containerId as Id<AnyStoreStructure>].store = ((container as AnyStoreStructure).store ?? {[(container as Resource).resourceType]: (container as Resource).amount});
       }
     }
 

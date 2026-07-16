@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/prefer-for-of */
 
+// EconWorkForeman.ts
+
+import { SpawnRequest } from "muster/muster";
 import { BaseEconForeman } from "./BaseEconForeman";
 import { Dwarf } from "./BaseForeman";
 import { Job } from "JobBoard";
@@ -150,6 +153,9 @@ class EconWorkForeman extends BaseEconForeman {
         const newJobs = this.jobs.filter(job => !currentJobs.has(job.id));
         score += newJobs.length;
         return score;
+    }
+    public getSpawnRequests(): SpawnRequest[] {
+        return []
     }
 }
 

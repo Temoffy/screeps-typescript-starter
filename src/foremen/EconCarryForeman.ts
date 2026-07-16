@@ -1,9 +1,12 @@
 /* eslint-disable @typescript-eslint/prefer-for-of */
 
+// EconCarryForeman.ts
+
 import { BaseEconForeman } from "./BaseEconForeman";
 import { Dwarf } from "./BaseForeman";
 import { Job } from "JobBoard";
 import { econTasks } from "econTasks";
+import { SpawnRequest } from "muster/muster";
 
 class EconCarryForeman extends BaseEconForeman {
     protected jobs: Job[];
@@ -147,6 +150,9 @@ class EconCarryForeman extends BaseEconForeman {
         const newJobs = this.jobs.filter(job => !currentJobs.has(job.id));
         score += newJobs.length;
         return score;
+    }
+    public getSpawnRequests(): SpawnRequest[] {
+        return []
     }
 }
 

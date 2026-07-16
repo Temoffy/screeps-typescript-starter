@@ -1,3 +1,5 @@
+// Prioritizer.ts
+
 interface Todo {
     readonly name: string;
     readonly func: () => number;
@@ -10,7 +12,7 @@ interface Todo {
 }
 
 // maximise score per cpu, where score is priority*number returned from func (qualitatively, how much it achieved).
-class Prioritizer {
+class Scheduler {
     private scheduled: Todo[] = [];
     private avePercentile = 0.7; // not exact, actual is higher. close 'nuff.
     private cpuLimit = Game.cpu.limit || 20;
@@ -119,4 +121,4 @@ class Prioritizer {
         }
     }
 }
-export {Prioritizer};
+export {Scheduler};

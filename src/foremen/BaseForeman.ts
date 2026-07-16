@@ -1,9 +1,14 @@
 /* eslint-disable @typescript-eslint/prefer-for-of */
 /* eslint-disable no-underscore-dangle */
 /* eslint-disable max-classes-per-file */
+
+// BaseForeman.ts
+
 import { Job, JobBoard, MY_NUMS } from "JobBoard";
 import { Evaluation, Task, econTasks } from "econTasks";
 import { Tools } from "utils/Tools";
+import { SpawnRequest, SpawnUrgency } from "muster/muster";
+
 
 interface Dwarf {
   readonly id: Id<Creep>;
@@ -45,6 +50,7 @@ abstract class BaseForeman {
     public abstract run(): void;
     public abstract assignCreep(creep: Creep, role: string): boolean;
     public abstract update():number;
+    public abstract getSpawnRequests(): SpawnRequest[];
 }
 
 

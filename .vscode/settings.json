@@ -6,13 +6,14 @@
         "editor.formatOnSave": true
     },
     "[typescript]": {
-        "editor.formatOnSave": false
+        "editor.formatOnSave": true
     },
     "editor.codeActionsOnSave": {
         "source.fixAll.eslint": "explicit"
     },
     "editor.formatOnSave": true,
     "editor.renderWhitespace": "boundary",
+    "editor.tabSize": 2,
     "files.encoding": "utf8",
     "files.insertFinalNewline": true,
     "files.trimTrailingWhitespace": true,

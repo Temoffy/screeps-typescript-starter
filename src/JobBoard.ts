@@ -6,6 +6,8 @@ reason: strings make good keys in js
 also the current one has a seizure every couple minutes
 */
 
+// JobBoard.ts
+
 import { CtrlLvl, WorldAtlas } from "WorldAtlas";
 
 

@@ -2,6 +2,8 @@ import {BaseForeman} from "./BaseForeman"
 import { EconWorkForeman } from "./EconWorkForeman";
 import { EconCarryForeman } from "./EconCarryForeman";
 
+// CreepHandler.ts
+
 class CreepHandler {
     private foremen: BaseForeman[] = [];
 
