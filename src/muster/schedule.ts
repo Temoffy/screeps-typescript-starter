@@ -94,7 +94,10 @@ export function findBestSlot(times: Interval[], preferredStart: number, duration
 /** Reserves the best-fit slot in place, splitting/removing the consumed interval. */
 export function reserveSlot(times: Interval[], preferredStart: number, duration: number): number {
   const slot = locateSlot(times, preferredStart, duration);
-  if (!slot) return -1;
+  if (!slot) {
+    console.log("muster scheduling error!")
+    return -1
+  };
 
   const { index, start } = slot;
   const [s, e] = times[index];

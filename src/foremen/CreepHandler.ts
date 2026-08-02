@@ -29,6 +29,9 @@ class CreepHandler {
     public getUpdateFunctions(): {func:() => number, name: string}[] {
         return this.foremen.map(foreman => ({func: () => foreman.update(), name: foreman.name}));
     }
+    public getSpawnRequests(){
+        return {func: () => this.foremen.flatMap(f=>f.getSpawnRequests())}
+    }
 }
 
 

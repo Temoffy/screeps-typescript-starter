@@ -8,6 +8,11 @@ import { Job } from "JobBoard";
 import { econTasks } from "econTasks";
 import { SpawnRequest } from "muster/muster";
 
+interface HaulRegion{
+    coreRoom: string;
+    carryParts: number;
+}
+
 class EconCarryForeman extends BaseEconForeman {
     protected jobs: Job[];
     protected foremanName = "econCarryForeman";
@@ -23,12 +28,8 @@ class EconCarryForeman extends BaseEconForeman {
         for (const dwarf of this.dwarves) {
             this.removeDwarfTasks(dwarf);
         }
-        for (const dwarf of this.dwarves) {
-            const job = this.jobs.find(j => j.id === dwarf.commands[0]?.jobId);
-            if (!job || job.type !== "delve" || job.active < job.amount) {
-                this.removeDwarfTasks(dwarf);
-            }
-        }
+
+        this.update()
 
         for(const dwarf of this.dwarves){
             const creep = Game.getObjectById(dwarf.id)
@@ -62,7 +63,7 @@ class EconCarryForeman extends BaseEconForeman {
     public run() {
         for (const job of this.jobs) {
             const text: string[] = []
-            for(const key of ["type"]){
+            for(const key of ["type","priority"]){
 
                 let val: any = job[key as keyof Job]
                 if(typeof val === "number"){
@@ -77,7 +78,9 @@ class EconCarryForeman extends BaseEconForeman {
         for (const dwarf of this.dwarves) {
             const creep = Game.getObjectById(dwarf.id);
             if (!creep) {
+                // safer to remove in later loop
                 dwarf.info.remove = true;
+                this.removeDwarfTasks(dwarf);
                 continue;
             }
             dwarf.info.working = false;
@@ -112,6 +115,12 @@ class EconCarryForeman extends BaseEconForeman {
 
             for(const command of dwarf.commands){
                 g.hud.addSecondaryPoint(`dwarf${dwarf.id}`, command.pos);
+            }
+        }
+        for(let i = 0; i<this.dwarves.length; i++){
+            if(this.dwarves[i].info.remove){
+                this.dwarves.splice(i,1)
+                i--
             }
         }
     }
@@ -151,8 +160,75 @@ class EconCarryForeman extends BaseEconForeman {
         score += newJobs.length;
         return score;
     }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    private desiredCarryWorkParts: number = Memory.muster?.desiredCarryWorkParts ?? 6;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    private maxSize: number = Memory.muster?.haulerMaxSize ?? 10;
     public getSpawnRequests(): SpawnRequest[] {
-        return []
+        const requests: SpawnRequest[] = []
+
+        const haulerBodies = [{body:[CARRY,MOVE],score:1}, {body:[CARRY,CARRY,MOVE],score:2}]
+
+        const soonDeadCarryParts = this.dwarves.filter(d => d.role === "hauler" && (Game.getObjectById(d.id)?.ticksToLive ?? 0) < 500).reduce((sum, d) => sum + d.info.carryParts, 0);
+        const currentCarryParts = this.dwarves.filter(d => d.role === "hauler").reduce((sum, d) => sum + d.info.carryParts, 0);
+
+        if(currentCarryParts < this.desiredCarryWorkParts){
+            const regions = this.getRegions()
+            const targetRegion = regions.reduce((lowest, test) => test.carryParts < lowest.carryParts ? test : lowest)
+
+            requests.push({
+                suffix: "h",
+                urgency: Math.max(3-currentCarryParts, 1),
+                priority: 10/currentCarryParts,
+                bodyOptions: haulerBodies,
+                time: Game.time,
+                room: targetRegion.coreRoom,
+                maxBodyScore: Math.min(this.maxSize, this.desiredCarryWorkParts - currentCarryParts - soonDeadCarryParts)
+            })
+        }
+
+        if(soonDeadCarryParts === 0) return requests
+
+        for( const dwarf of this.dwarves.filter(d => d.role === "hauler" && (Game.getObjectById(d.id)?.ticksToLive ?? 0) < 200)){
+            requests.push({
+                suffix: "h",
+                urgency: 1,
+                priority: 10/currentCarryParts,
+                bodyOptions: haulerBodies,
+                time: Game.getObjectById(dwarf.id)?.ticksToLive ?? 0,
+                room: Game.getObjectById(dwarf.id)?.pos.roomName ?? "W0N0",
+                maxBodyScore: Math.min(this.maxSize, this.desiredCarryWorkParts - currentCarryParts - soonDeadCarryParts)
+            })
+        }
+
+        return requests
+    }
+    private getRegions(): HaulRegion[]{
+        const regions: HaulRegion[] = []
+        for(const spawnid in Game.spawns){
+            const spawn = Game.spawns[spawnid]!
+            regions.push({
+                coreRoom: spawn.pos.roomName,
+                carryParts: 0
+            })
+        }
+        for(const dwarf of this.dwarves.filter(d=>d.role==="hauler")){
+            const creep = Game.getObjectById(dwarf.id)
+            if(!creep) continue
+            const region = regions.reduce((closest, testR) => {
+                const closestDist = Game.map.getRoomLinearDistance(creep.pos.roomName, closest.coreRoom)
+                const regionDist = Game.map.getRoomLinearDistance(creep.pos.roomName, testR.coreRoom)
+                return regionDist < closestDist ? testR : closest
+            })
+            if(!region) continue
+
+            const rDist = Game.map.getRoomLinearDistance(creep.pos.roomName, region.coreRoom)
+            for(const r of regions){
+                const testDist = Game.map.getRoomLinearDistance(creep.pos.roomName, r.coreRoom)
+                if(testDist <= rDist || testDist < 2) r.carryParts += dwarf.info.carryParts
+            }
+        }
+        return regions
     }
 }
 

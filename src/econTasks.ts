@@ -225,7 +225,7 @@ class CarveTask extends Task {
     const amount = Math.min(maxAmount, job.amount);
 
     // todo: pathfinding length. v low priority
-    const distance = Tools.maxDistance(simPos, job.pos);
+    const distance = Math.max(Tools.maxDistance(simPos, job.pos)-3, 0);
     const time = 1.1*distance + 1.1*timeAdjustment + Math.ceil(amount / (simDwarf.info.workParts * BUILD_POWER))
 
     // amount*lifetime / spawncost*distance
@@ -259,7 +259,7 @@ class CarveTask extends Task {
       return false;
     }
 
-    const traveling = this.travel(creep, command.target, command.pos, 1);
+    const traveling = this.travel(creep, command.target, command.pos, 3);
     if (traveling === undefined) return undefined;
     // construction might be complete, but it's certainly gone!
     if (traveling === false) return true;
@@ -320,14 +320,13 @@ class RefineTask extends Task {
     }
 
     // todo: pathfinding length. v low priority
-    const distance = Tools.maxDistance(simPos, job.pos);
+    const distance = Math.max(Tools.maxDistance(simPos, job.pos)-3, 0);
     const workAmount = Math.min(simDwarf.info.workParts, job.amount);
     const time = 1.1*distance + Math.ceil(maxAmount / (workAmount * UPGRADE_CONTROLLER_POWER)) + 1.1*timeAdjustment;
 
     // amount*lifetime / spawncost*distance
     // priority should be a number between ~0 and ~2, default 1.
-    let score = job.priority * (maxAmount*1500) / (simDwarf.info.spawnCost*(time+.1)); // +.1 avoids div/0 err
-    score /= Math.pow(2, job.active)
+    const score = job.priority * (maxAmount*1500) / (simDwarf.info.spawnCost*(time+.1)); // +.1 avoids div/0 err
 
     return { normalized: 0, score, amount: workAmount, time };
   }
@@ -481,8 +480,9 @@ class DelveTask extends Task {
   public efficiency(simDwarf: Dwarf, simStore: SimpleStore, simPos: RoomPosition, job: Job, timeAdjustment = 0): Evaluation {
     // delve tasks are by workpart, not energy.
     // job.active is workpart count, not creep count
-    if (job.amount <= job.active) return { normalized: 0, score: 0, amount: 0, time: 0 };
+    if (job.amount <= job.active || (job.type === "delve" && job.space <= 0)) return { normalized: 0, score: 0, amount: 0, time: 0 };
     if (job.resourceType !== RESOURCE_ENERGY && job.active >0) return { normalized: 0, score: 0, amount: 0, time: 0 }; // only one creep on minerals
+    if (_.sum(simStore) >= Math.max(simDwarf.info.carryParts * CARRY_CAPACITY,1)) return { normalized: 0, score: 0, amount: 0, time: 0 };
 
     const amount = Math.max( 0, Math.min( simDwarf.info.workParts, job.amount - job.active));
     const distance = 1.1 * Tools.maxDistance(simPos, job.pos) + 1.1 * timeAdjustment;
@@ -498,6 +498,7 @@ class DelveTask extends Task {
 
     const command = this.generateBasicCommand(job, 0);
     job.active += amount-1; // track active workparts, not creeps, account for +1 in generateBasicCommand
+    if(job && job.type === "delve") job.space -= 1;
     command.amount = amount;
     dwarf.commands.push(command);
     return 0;
@@ -525,13 +526,11 @@ class DelveTask extends Task {
       let delveAtlas
       if (delveTarget instanceof Source) {
         depositAmount = delveTarget.energy
-        if (depositAmount === 0) return true;
 
         harvestMulti = HARVEST_POWER;
         delveAtlas = g.atlas.rooms[delveTarget.pos.roomName].sources[command.target as Id<Source>];
       } else if (delveTarget instanceof Mineral) {
         depositAmount = delveTarget.mineralAmount
-        if (depositAmount === 0) return true;
 
         harvestMulti = HARVEST_MINERAL_POWER
         delveAtlas = g.atlas.rooms[delveTarget.pos.roomName].minerals[command.target as Id<Mineral>];
@@ -589,6 +588,8 @@ class DelveTask extends Task {
         if (!container) return undefined
         g.atlas.LogContainerAdd({ roomId: delveTarget.pos.roomName, containerId: container, amount: delveAmount, type: command.resourceType })
         return undefined
+      case ERR_NOT_ENOUGH_RESOURCES:
+        return undefined; // source is depleted, but not an error
       default:
         console.log("unhandled error in delvetask! " + result.toString())
     }
@@ -606,6 +607,7 @@ class DelveTask extends Task {
 
     const job = jobs.find(j => j.id === command.jobId);
     if (job) job.active -= command.amount-1; // track active workparts, not creeps, account for -1 in unclaimJob
+    if(job && job.type === "delve") job.space += 1;
     return this.unclaimJob(jobs, command.jobId, 0);
   }
   public maxResource(job: Job): number {
@@ -624,7 +626,7 @@ class RestoreTask extends Task {
     const amount = Math.min(maxAmount, job.amount);
 
     // todo: pathfinding length. v low priority
-    const distance = 1.1*Tools.maxDistance(simPos, job.pos) + 1.1*timeAdjustment;
+    const distance = 1.1*Math.max(Tools.maxDistance(simPos, job.pos)-3, 0) + 1.1*timeAdjustment;
     const time = distance + Math.ceil(amount / (simDwarf.info.workParts * REPAIR_POWER / REPAIR_COST))
 
     // amount*lifetime / spawncost*distance

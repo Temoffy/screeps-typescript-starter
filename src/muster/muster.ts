@@ -15,10 +15,10 @@ interface SpawnRequest {
   readonly suffix: string; // role marker
   readonly urgency: SpawnUrgency;
   readonly priority?: number; // allow sorting within same urgency, integer
-  readonly bodyOptions: BodyPartConstant[][]; // spawn most expensive variation accounting for repeat min/max
-  readonly minBodyRepeat?: number; // multipliers for bodyOptions within a single creep
-  readonly maxBodyRepeat?: number;
-  readonly targetRepeatCount?: number; // total target body array repeats across all creeps, for example, if you want 3 creeps with 2 repeats of a body, set this to 6 with a max repeat of 2.
+  readonly bodyOptions: {body:BodyPartConstant[],score:number}[]; // spawn most expensive variation accounting for repeat min/max
+  readonly minBodyScore?: number; // multipliers for bodyOptions within a single creep
+  readonly maxBodyScore?: number;
+  readonly targetBodyScore?: number; // total target body array repeats across all creeps, for example, if you want 3 creeps with 2 repeats of a body, set this to 6 with a max repeat of 2.
   readonly time: number; // target completion time
   readonly room: string; // destination, actual might vary based on availability and priority.
   plannedTime?: number;
@@ -41,7 +41,12 @@ class Muster {
     this.requestSources.push(source);
   }
 
-  public updateSpawnSchedules(): void {
+  public updateSpawnSchedules(): number {
+    const oldSchedules: string[] = []
+    for (const spawnerId in this.spawnSchedules){
+      oldSchedules.push(... this.spawnSchedules[spawnerId].map(a => `${a.suffix}${a.urgency}${Math.max(a.time,Game.time+5)}`))
+    }
+
     const spawnNames = Object.keys(Game.spawns);
     spawnNames.forEach(a => console.log(a));
 
@@ -63,6 +68,21 @@ class Muster {
     const requests = this.requestSources.flatMap(source => source());
 
     this.assignRequestsByMatrix(spawnInfos, requests);
+
+    const newSchedules: string[] = []
+    for (const spawnerId in this.spawnSchedules){
+      newSchedules.push(... this.spawnSchedules[spawnerId].map(a => `${a.suffix}${a.urgency}${Math.max(a.time,Game.time+5)}`))
+    }
+    console.log(`Muster: old schedules: ${JSON.stringify(oldSchedules)} new schedules: ${JSON.stringify(newSchedules)}`)
+    // eslint-disable-next-line @typescript-eslint/no-for-in-array
+    for(let oldI = 0; oldI < oldSchedules.length; oldI++){
+      const newI = newSchedules.findIndex(a => a === oldSchedules[oldI])
+      if(newI === -1) continue
+      oldSchedules.splice(oldI, 1)
+      oldI--
+      newSchedules.splice(Number(newI), 1)
+    }
+    return Math.max(oldSchedules.length, newSchedules.length)
   }
 
   private assignRequestsByMatrix(spawnInfos: SpawnInfo[], requests: SpawnRequest[]): void {
@@ -113,7 +133,8 @@ class Muster {
 
   private calculateScore(spawnInfo: SpawnInfo, request: SpawnRequest): number {
     // TODO: score based on room in schedule, 2x travel time,
-    return Math.random(); // Placeholder for actual scoring logic
+    const bestBody = this.getCreepBuildArray(request, spawnInfo.energyCap);
+    return Math.min(Math.random(), bestBody.length); // Placeholder for actual scoring logic
   }
 
   private normalizeMatrix(matrix: { normalized: number; score: number }[][]): void {
@@ -188,25 +209,27 @@ class Muster {
   private getCreepBuildArray(request: SpawnRequest, maxCost: number): BodyPartConstant[] {
     let bestI = 0;
     let bestMultipl = 0;
+    let bestBodyScore = 0
     let bestCost = 0;
     request.bodyOptions.forEach((option, i) => {
-      const baseCost = _.sum(option, b => BODYPART_COST[b]);
+      const baseCost = _.sum(option.body, b => BODYPART_COST[b]);
       const testMulti = Math.min(
         Math.floor(maxCost / baseCost),
-        Math.floor(50 / option.length),
-        request.maxBodyRepeat ?? 100
+        Math.floor(50 / option.body.length),
+        Math.floor( (request.maxBodyScore??1000)/option.score)
       );
-      if (baseCost * testMulti > bestCost || (baseCost * testMulti === bestCost && testMulti <= bestMultipl)) {
+      if ( 0 < (testMulti*option.score - bestBodyScore || bestCost - baseCost*testMulti)) {
         bestI = i;
         bestMultipl = testMulti;
         bestCost = baseCost * testMulti;
+        bestBodyScore = bestMultipl*option.score
       }
     });
 
-    if (bestMultipl < (request.minBodyRepeat ?? request.targetRepeatCount ?? 1)) return [];
+    if (bestBodyScore < (request.minBodyScore ?? request.targetBodyScore ?? 1)) return [];
 
     // duplicate all elements of chosen body bestMultipl times (keep order)
-    return request.bodyOptions[bestI].flatMap(i => Array.from({ length: bestMultipl }).fill(i)) as BodyPartConstant[];
+    return request.bodyOptions[bestI].body.flatMap(i => Array.from({ length: bestMultipl }).fill(i)) as BodyPartConstant[];
   }
   private names = [
     "Azaghâl",
@@ -279,13 +302,22 @@ class Muster {
 
       if ((!this.spawnSchedules[spawnerId] || this.spawnSchedules[spawnerId].length === 0) && this.timeToRecalc === 0) {
         this.updateSpawnSchedules();
-        this.timeToRecalc = 30;
+        this.timeToRecalc = 15;
         // TODO: link to scheduler instead of raw tick count!!
       }
 
-      const requests = this.spawnSchedules[spawnerId].filter(
+      let requests = this.spawnSchedules[spawnerId].filter(
         a => (a.plannedTime ?? -1) <= Game.time && (a.plannedTime ?? -1) > 0
       );
+
+      if ( this.timeToRecalc === 0) {
+        this.updateSpawnSchedules();
+        this.timeToRecalc = 15;
+        requests = this.spawnSchedules[spawnerId].filter(
+          a => (a.plannedTime ?? -1) <= Game.time && (a.plannedTime ?? -1) > -1
+        );
+        // TODO: link to scheduler instead of raw tick count!!
+      }
 
       requests.sort((a, b) => {
         const condition = (aa: SpawnRequest, bb: SpawnRequest) =>
@@ -295,10 +327,19 @@ class Muster {
         return 0;
       });
 
+      g.hud.makeElement(`spawner ${spawnerId}`, spawner.pos, undefined, undefined, {scale:"medium"})
+      for(const r of this.spawnSchedules[spawnerId]){
+        g.hud.addText(`spawner ${spawnerId}`, `${r.suffix} urg:${r.urgency} t:${(r.plannedTime ?? Game.time)-Game.time}`)
+      }
+      g.hud.addText(`spawner ${spawnerId}`, 'break')
+      for(const r of requests){
+        g.hud.addText(`spawner ${spawnerId}`, `${r.suffix} urg:${r.urgency} t:${(r.plannedTime ?? Game.time)-Game.time}`)
+      }
+
       let k = 0;
       while (k < requests.length) {
         const body = this.getCreepBuildArray(requests[k], spawner.room.energyAvailable);
-        if (body.length === 0) {
+        if (body.length === 0 || (requests[k].urgency<=SpawnUrgency.needed && body.length < this.getCreepBuildArray(requests[k], spawner.room.energyCapacityAvailable).length)) {
           k++;
           continue;
         }

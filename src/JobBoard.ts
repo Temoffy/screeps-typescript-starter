@@ -67,6 +67,7 @@ interface DelveJob {
   tick: number;
   priority: number;
   active: number;
+  space: number;
   readonly id: number;
 }
 
@@ -81,7 +82,7 @@ const enum MY_NUMS{
 class JobBoard {
   public GetNewId(jobs: Job[]): number {
     // min excluded algorithm
-    let id = 0;
+    let id = 1;
     const ids = new Set(jobs.map(j => j.id));
     while (ids.has(id)) {
       id++;
@@ -107,6 +108,7 @@ class JobBoard {
           continue;
         }
 
+
         const sourceAtlas = roomAtlas.sources[sourceId as Id<Source>];
         const newJob: DelveJob = {
           type: "delve",
@@ -115,8 +117,9 @@ class JobBoard {
           amount: sourceAtlas.regenRate / HARVEST_POWER,
           resourceType: RESOURCE_ENERGY,
           tick: Game.time,
-          priority: 1,
+          priority: .1,
           active: 0,
+          space: sourceAtlas.access,
           id: this.GetNewId(jobs)
         };
         jobs.push(newJob);
@@ -136,8 +139,9 @@ class JobBoard {
           amount: 50, // work as fast as possible
           resourceType: mineralAtlas.type,
           tick: Game.time,
-          priority: 1,
+          priority: .1,
           active: 0,
+          space: 1, // only one dwarf per mineral
           id: this.GetNewId(jobs)
         };
         jobs.push(newJob);
@@ -163,6 +167,7 @@ class JobBoard {
         const job = carveJobs.find(j => j.target === siteId);
         if (job) {// already a job check
           job.priority = Math.max(priority, job.priority);
+          if(job.active === 0) job.amount = (realsite?.progressTotal || 0) - (realsite?.progress || 0);
           continue;
         }
         const site = carveSites[siteId as Id<ConstructionSite>];
@@ -252,7 +257,7 @@ class JobBoard {
       if (roomAtlas.control < CtrlLvl.colonized || !room || !room.controller) continue;
       const controller = room.controller;
 
-      const priority = 1 + 50000 / controller.ticksToDowngrade
+      const priority = 1 + 5000 / controller.ticksToDowngrade
 
       const job = refineJobs.find(j => j.pos.roomName === roomName);
       if (job) {
@@ -261,7 +266,7 @@ class JobBoard {
           job.amount -= (workpartDemand - 15)
           continue;
         }
-        job.priority = 1 + 50000 / controller.ticksToDowngrade
+        job.priority = 1 + 5000 / controller.ticksToDowngrade
         continue
       }
 
@@ -309,6 +314,8 @@ class JobBoard {
       if (roomAtlas.control < CtrlLvl.colonized) continue;
       const room = Game.rooms[roomName];
 
+      if(!room) continue;
+
       // highest priority tasks
       // extensions, spawns, and towers
       let types: string[] = [STRUCTURE_EXTENSION, STRUCTURE_SPAWN, STRUCTURE_TOWER];
@@ -325,7 +332,7 @@ class JobBoard {
           pos: { roomName: target.pos.roomName, x: target.pos.x, y: target.pos.y },
           amount: (target as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY),
           resourceType: RESOURCE_ENERGY,
-          priority: 2,
+          priority: 9,
           active: 0,
           tick: Game.time,
           id: this.GetNewId(updatedJobs),
@@ -354,7 +361,7 @@ class JobBoard {
           pos: { roomName: target.pos.roomName, x: target.pos.x, y: target.pos.y },
           amount,
           resourceType: RESOURCE_ENERGY,
-          priority: 1,
+          priority: 8,
           active: 0,
           tick: Game.time,
           id: this.GetNewId(updatedJobs),
@@ -382,6 +389,7 @@ class JobBoard {
           job.amount = amount;
           continue;
         }
+        if(job) continue
 
         if(amount <= 0) continue;
         let material: ResourceConstant | 'any' = RESOURCE_ENERGY;
@@ -395,7 +403,7 @@ class JobBoard {
           pos: containerAtlas.pos,
           amount,
           resourceType: material,
-          priority: 0.9,
+          priority: 5-containerAtlas.rank,
           active: 0,
           tick: Game.time,
           id: this.GetNewId(updatedJobs),

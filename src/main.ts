@@ -22,6 +22,7 @@ declare global {
     worldAtlas: any;
     jobBoard: any;
     prioritizer: any;
+    muster: any;
   }
 
   interface Creep {
@@ -59,17 +60,10 @@ const scheduler = new Scheduler();
 for (const updateFunction of creepHandler.getUpdateFunctions()) {
   scheduler.schedule(updateFunction.func, updateFunction.name, 1, 10);
 }
+scheduler.schedule(muster.updateSpawnSchedules.bind(muster), "muster", 1, 30);
 
-muster.addRequestSource(() => [
-  {
-    suffix: "test",
-    urgency: 2,
-    bodyOptions: [[MOVE, TOUGH]],
-    time: Game.time,
-    room: Game.spawns.Spawn1.pos.roomName,
-    maxBodyRepeat: 1
-  }
-]);
+// eslint-disable-next-line @typescript-eslint/unbound-method
+muster.addRequestSource(creepHandler.getSpawnRequests().func);
 
 module.exports.loop = function () {
   g.hud.makeElement("", Game.spawns.Spawn1.pos);
@@ -91,5 +85,4 @@ module.exports.loop = function () {
   muster.runSpawning();
 
   g.hud.display();
-  console.log("Loop finished");
 };

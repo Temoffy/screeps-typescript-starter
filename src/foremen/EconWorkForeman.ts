@@ -8,6 +8,11 @@ import { Dwarf } from "./BaseForeman";
 import { Job } from "JobBoard";
 import { econTasks } from "econTasks";
 
+interface WorkRegion{
+    coreRoom: string;
+    workParts: number;
+}
+
 class EconWorkForeman extends BaseEconForeman {
     protected jobs: Job[];
     protected foremanName = "econWorkForeman";
@@ -69,7 +74,7 @@ class EconWorkForeman extends BaseEconForeman {
     public run() {
         for (const job of this.jobs) {
             const text: string[] = []
-            for(const key of ["type"]){
+            for(const key of ["type","amount","priority"]){
                 let val: any = job[key as keyof Job]
                 if(typeof val === "number"){
                     const valTest = val.toFixed(2);
@@ -83,7 +88,9 @@ class EconWorkForeman extends BaseEconForeman {
         for (const dwarf of this.dwarves) {
             const creep = Game.getObjectById(dwarf.id);
             if (!creep) {
+                // safer to remove in later loop
                 dwarf.info.remove = true;
+                this.removeDwarfTasks(dwarf);
                 continue;
             }
             dwarf.info.working = false;
@@ -118,6 +125,12 @@ class EconWorkForeman extends BaseEconForeman {
 
             for(const command of dwarf.commands){
                 g.hud.addSecondaryPoint(`dwarf${dwarf.id}`, command.pos);
+            }
+        }
+        for(let i = 0; i<this.dwarves.length; i++){
+            if(this.dwarves[i].info.remove){
+                this.dwarves.splice(i,1)
+                i--
             }
         }
     }
@@ -155,7 +168,93 @@ class EconWorkForeman extends BaseEconForeman {
         return score;
     }
     public getSpawnRequests(): SpawnRequest[] {
-        return []
+        const requests: SpawnRequest[] = []
+
+        const W = WORK
+        const M = MOVE
+        const C = CARRY
+
+        // TODO: make priority per-region
+        const energyDelverBodies = [{body:[W,M],score:1}, {body:[W,W,M],score:2}, {body:[W,W,W,W,W,M,M,M],score:5}]
+        const delverCount = this.dwarves.filter(d=>d.role==="mobileDelver").length
+        for(const job of this.jobs.filter(j => j.type === "delve" && j.amount>j.active && j.space>0)){
+            requests.push({
+                suffix: "md",
+                urgency: Math.max(4-delverCount,1),
+                priority: 20,
+                bodyOptions: energyDelverBodies,
+                time: Game.time,
+                room: job.pos.roomName,
+                maxBodyScore: job.amount
+            })
+        }
+
+
+        const workerBodies = [{body:[W,C,M],score:1}]
+
+        let targetWorkParts = this.jobs.filter(j => j.type === "delve" && j.resourceType === RESOURCE_ENERGY).reduce((sum, j) => sum + j.active, 0)
+        targetWorkParts = Math.ceil(targetWorkParts*1.5)
+
+        const soonDeadWorkParts = this.dwarves.filter(d => d.role === "worker" && (Game.getObjectById(d.id)?.ticksToLive ?? 0) < 500).reduce((sum, d) => sum + d.info.workParts, 0);
+        const currentWorkParts = this.dwarves.filter(d => d.role === "worker").reduce((sum, d) => sum + d.info.workParts, 0);
+
+        if(currentWorkParts < targetWorkParts){
+            const regions = this.getRegions()
+            const targetRegion = regions.reduce((lowest, test) => test.workParts < lowest.workParts ? test : lowest)
+
+            requests.push({
+                suffix: "w",
+                urgency: Math.max(3-(Math.floor(currentWorkParts/3)), 1),
+                priority: 10/currentWorkParts,
+                bodyOptions: workerBodies,
+                time: Game.time,
+                room: targetRegion.coreRoom,
+                maxBodyScore: targetWorkParts - currentWorkParts - soonDeadWorkParts
+            })
+        }
+
+        if(soonDeadWorkParts === 0) return requests
+
+        for( const dwarf of this.dwarves.filter(d => d.role === "worker" && (Game.getObjectById(d.id)?.ticksToLive ?? 0) < 200)){
+            requests.push({
+                suffix: "w",
+                urgency: 1,
+                priority: currentWorkParts,
+                bodyOptions: workerBodies,
+                time: Game.getObjectById(dwarf.id)?.ticksToLive ?? 0,
+                room: Game.getObjectById(dwarf.id)?.pos.roomName ?? "W0N0",
+                maxBodyScore: targetWorkParts - currentWorkParts - soonDeadWorkParts
+            })
+        }
+
+        return requests
+    }
+    private getRegions(): WorkRegion[]{
+        const regions: WorkRegion[] = []
+        for(const spawnid in Game.spawns){
+            const spawn = Game.spawns[spawnid]!
+            regions.push({
+                coreRoom: spawn.pos.roomName,
+                workParts: 0
+            })
+        }
+        for(const dwarf of this.dwarves.filter(d=>d.role==="worker")){
+            const creep = Game.getObjectById(dwarf.id)
+            if(!creep) continue
+            const region = regions.reduce((closest, testR) => {
+                const closestDist = Game.map.getRoomLinearDistance(creep.pos.roomName, closest.coreRoom)
+                const regionDist = Game.map.getRoomLinearDistance(creep.pos.roomName, testR.coreRoom)
+                return regionDist < closestDist ? testR : closest
+            })
+            if(!region) continue
+
+            const rDist = Game.map.getRoomLinearDistance(creep.pos.roomName, region.coreRoom)
+            for(const r of regions){
+                const testDist = Game.map.getRoomLinearDistance(creep.pos.roomName, r.coreRoom)
+                if(testDist <= rDist || testDist < 2) r.workParts += dwarf.info.workParts
+            }
+        }
+        return regions
     }
 }
 
