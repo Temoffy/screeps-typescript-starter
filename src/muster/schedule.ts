@@ -95,9 +95,9 @@ export function findBestSlot(times: Interval[], preferredStart: number, duration
 export function reserveSlot(times: Interval[], preferredStart: number, duration: number): number {
   const slot = locateSlot(times, preferredStart, duration);
   if (!slot) {
-    console.log("muster scheduling error!")
-    return -1
-  };
+    console.log("muster scheduling error!");
+    return -1;
+  }
 
   const { index, start } = slot;
   const [s, e] = times[index];

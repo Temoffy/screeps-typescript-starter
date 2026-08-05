@@ -9,7 +9,6 @@ import { Evaluation, Task, econTasks } from "econTasks";
 import { Tools } from "utils/Tools";
 import { SpawnRequest, SpawnUrgency } from "muster/muster";
 
-
 interface Dwarf {
   readonly id: Id<Creep>;
   readonly role: string;
@@ -33,26 +32,25 @@ interface Command {
 }
 
 abstract class BaseForeman {
-    protected dwarves: Dwarf[] = [];
-    protected _memberTypes: { [key: string]: string } = {};
-    // protects name during rollup, for Prioritizer purposes.
-    protected abstract foremanName: string;
+  protected dwarves: Dwarf[] = [];
+  protected _memberTypes: { [key: string]: string } = {};
+  // protects name during rollup, for Prioritizer purposes.
+  protected abstract foremanName: string;
 
-    public get memberTypes(): string[] {
-        return Object.keys(this._memberTypes);
-    }
-    public get memberIDs(): Id<Creep>[] {
-        return this.dwarves.map(dwarf => dwarf.id);
-    }
-    public get name(): string {
-        return this.foremanName;
-    }
-    public abstract run(): void;
-    public abstract assignCreep(creep: Creep, role: string): boolean;
-    public abstract update():number;
-    public abstract getSpawnRequests(): SpawnRequest[];
+  public get memberTypes(): string[] {
+    return Object.keys(this._memberTypes);
+  }
+  public get memberIDs(): Id<Creep>[] {
+    return this.dwarves.map(dwarf => dwarf.id);
+  }
+  public get name(): string {
+    return this.foremanName;
+  }
+  public abstract run(): void;
+  public abstract assignCreep(creep: Creep, role: string): boolean;
+  public abstract update(): number;
+  public abstract getSpawnRequests(): SpawnRequest[];
 }
 
-
-export type { Dwarf, Command};
-export {BaseForeman}
+export type { Dwarf, Command };
+export { BaseForeman };

@@ -1,19 +1,18 @@
-
-class Tools{
-  public static DIRECTIONS = [1,2,3,4,5,6,7,8]
+class Tools {
+  public static DIRECTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
   public static DIRECTION_OFFSETS: { [key: number]: number[] } = {
-    1: [0, -1],  // TOP
-    2: [1, -1],  // TOP_RIGHT
-    3: [1, 0],   // RIGHT
-    4: [1, 1],   // BOTTOM_RIGHT
-    5: [0, 1],   // BOTTOM
-    6: [-1, 1],  // BOTTOM_LEFT
-    7: [-1, 0],  // LEFT
-    8: [-1, -1]  // TOP_LEFT
+    1: [0, -1], // TOP
+    2: [1, -1], // TOP_RIGHT
+    3: [1, 0], // RIGHT
+    4: [1, 1], // BOTTOM_RIGHT
+    5: [0, 1], // BOTTOM
+    6: [-1, 1], // BOTTOM_LEFT
+    7: [-1, 0], // LEFT
+    8: [-1, -1] // TOP_LEFT
   };
-  public static getOffset(coords:Pos, dir:number) {
+  public static getOffset(coords: Pos, dir: number) {
     const offset = this.DIRECTION_OFFSETS[dir];
-    return {x:coords.x + offset[0], y:coords.y + offset[1], roomName:coords.roomName};
+    return { x: coords.x + offset[0], y: coords.y + offset[1], roomName: coords.roomName };
   }
 
   public static maxDistance(pos1: Pos, pos2: Pos) {
@@ -47,4 +46,4 @@ class Tools{
     return neighbors;
   }
 }
-export {Tools};
+export { Tools };
